@@ -330,19 +330,24 @@ export default function GanttChart() {
 
   const projectStart = phases[0].start;
   const projectEnd = phases[phases.length - 1].end;
-  const totalDays = diffDays(projectStart, projectEnd) + 1;
+  
+  // Display full year 2026
+  const yearStart = "2026-01-01";
+  const yearEnd = "2026-12-31";
+  const totalDays = diffDays(yearStart, yearEnd) + 1;
   const TOTAL_W = Math.ceil(totalDays * PX_PER_DAY);
 
-  function toX(dateStr: string): number { return Math.max(0, diffDays(projectStart, dateStr)) * PX_PER_DAY; }
+  function toX(dateStr: string): number { return Math.max(0, diffDays(yearStart, dateStr)) * PX_PER_DAY; }
   function toW(s: string, e: string): number { return Math.max((diffDays(s, e) + 1) * PX_PER_DAY, 6); }
 
-  // Build week/month ticks from project start
+  // Build month ticks for all 12 months of 2026
   const monthTicks: {label: string, date: string}[] = [];
-  let cursor = new Date(projectStart);
-  const pEnd = new Date(projectEnd);
-  while (cursor <= pEnd) {
-    monthTicks.push({ label: cursor.toLocaleDateString("en-US",{month:"short",day:"numeric"}), date: fmtISO(cursor) });
-    cursor.setDate(cursor.getDate() + 28);
+  for (let month = 0; month < 12; month++) {
+    const date = new Date(2026, month, 1);
+    monthTicks.push({ 
+      label: date.toLocaleDateString("en-US",{month:"short"}), 
+      date: fmtISO(date) 
+    });
   }
 
   const isPOpen = (id: string) => phaseOpen[id] !== false;
@@ -367,7 +372,7 @@ export default function GanttChart() {
 
   // Today line
   const todayStr = fmtISO(new Date());
-  const todayInRange = todayStr >= projectStart && todayStr <= projectEnd;
+  const todayInRange = todayStr >= yearStart && todayStr <= yearEnd;
   const todayX = todayInRange ? toX(todayStr) : null;
 
   const saveTask = (form: any) => {
@@ -518,7 +523,7 @@ export default function GanttChart() {
             {/* Scrollable timeline header */}
             <div ref={headerScrollRef} onScroll={onHeaderScroll}
               style={{ flex:1,overflowX:"scroll",overflowY:"hidden",display:"flex",flexDirection:"column" }}>
-              <div style={{ minWidth:TOTAL_W,width:TOTAL_W,height:"100%",display:"flex",flexDirection:"column" }}>
+              <div style={{ minWidth:TOTAL_W+60,width:TOTAL_W+60,height:"100%",display:"flex",flexDirection:"column",paddingLeft:30 }}>
                 {/* Phase color bands */}
                 <div style={{ position:"relative",height:16,flexShrink:0 }}>
                   {phases.map(pm => {
@@ -539,7 +544,7 @@ export default function GanttChart() {
                     return (
                       <div key={i} style={{ position:"absolute",top:0,left:x,height:"100%",display:"flex",flexDirection:"column",justifyContent:"flex-end",paddingBottom:4 }}>
                         <div style={{ width:1,height:7,background:"#cbd5e1",marginBottom:2,marginLeft:0 }}/>
-                        <span style={{ fontSize:9,fontWeight:700,color:"#475569",whiteSpace:"nowrap",marginLeft:-10 }}>{tick.label}</span>
+                        <span style={{ fontSize:10,fontWeight:700,color:"#475569",whiteSpace:"nowrap",transform:"translateX(-50%)" }}>{tick.label}</span>
                       </div>
                     );
                   })}
@@ -605,7 +610,7 @@ export default function GanttChart() {
             <div ref={bodyScrollRef} onScroll={onBodyScroll}
               style={{ flex:1,overflowX:"scroll",overflowY:"auto",position:"relative" }}
               onMouseLeave={()=>setTooltip(null)}>
-              <div style={{ minWidth:TOTAL_W,width:TOTAL_W,position:"relative" }}>
+              <div style={{ minWidth:TOTAL_W+60,width:TOTAL_W+60,position:"relative",paddingLeft:30 }}>
                 {rows.map((row, ri) => {
                   const { type, pm } = row;
                   const t = type==="task" ? row.t : null;
