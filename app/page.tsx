@@ -474,9 +474,15 @@ export default function GanttChart() {
 
   const applyPhaseChanges = async (newPhases: any) => {
     try {
-      // Prepare phases array with order
+      // Prepare phases array with order, filtering out internal Convex fields
       const phasesWithOrder = newPhases.map((p: any, idx: number) => ({
-        ...p,
+        id: p.id,
+        label: p.label,
+        color: p.color,
+        light: p.light,
+        start: p.start,
+        end: p.end,
+        durationDays: p.durationDays,
         order: idx,
       }));
       

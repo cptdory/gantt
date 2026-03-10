@@ -75,7 +75,7 @@ export const updatePhases = mutation({
         light: v.string(),
         start: v.string(),
         end: v.string(),
-        durationDays: v.number(),
+        durationDays: v.optional(v.number()),
         order: v.number(),
       })
     ),
@@ -85,15 +85,32 @@ export const updatePhases = mutation({
     const existingPhases = await ctx.db.query("phases").collect();
     const existingMap = new Map(existingPhases.map((p) => [p.id, p]));
 
+    // Helper to calculate durationDays from start and end
+    const calculateDuration = (start: string, end: string) => {
+      const startDate = new Date(start);
+      const endDate = new Date(end);
+      const diffMs = endDate.getTime() - startDate.getTime();
+      return Math.round(diffMs / (1000 * 60 * 60 * 24)) + 1; // +1 to include both start and end dates
+    };
+
     // Update or create phases
     for (let i = 0; i < args.phases.length; i++) {
       const phaseData = args.phases[i];
+      
+      // Calculate durationDays if not provided
+      const durationDays = phaseData.durationDays || calculateDuration(phaseData.start, phaseData.end);
+      
+      const phaseWithDuration = {
+        ...phaseData,
+        durationDays,
+      };
+
       const existing = existingMap.get(phaseData.id);
 
       if (existing) {
-        await ctx.db.patch(existing._id, phaseData);
+        await ctx.db.patch(existing._id, phaseWithDuration);
       } else {
-        await ctx.db.insert("phases", phaseData);
+        await ctx.db.insert("phases", phaseWithDuration);
       }
     }
 
