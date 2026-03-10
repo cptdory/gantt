@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "convex": "^1.32.0",
     "frappe-gantt": "^1.2.2",
     "next": "16.1.6",
     "react": "19.2.3",

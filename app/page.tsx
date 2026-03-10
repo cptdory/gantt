@@ -110,11 +110,13 @@ function uid() { return Math.random().toString(36).slice(2, 9); }
 // Resolve tasks to real dates given current phase schedule
 function resolveTasks(taskDefs: any[], phases: any[]): any[] {
   const phaseMap = Object.fromEntries(phases.map(p => [p.id, p]));
-  return taskDefs.map(td => {
+  return taskDefs
+    .filter(td => phaseMap[td.phaseId]) // Filter out tasks from deleted phases
+    .map(td => {
     const ph = phaseMap[td.phaseId];
     const start = addDays(ph.start, td.so);
     const end = addDays(ph.start, Math.min(td.eo, diffDays(ph.start, ph.end)));
-    return { ...td, id: td.id || uid(), start, end };
+    return { ...td, id: td.id || uid(), start, end, status: td.status || "Planned" };
   });
 }
 
@@ -192,6 +194,36 @@ function PhaseEditModal({ phases, onSave, onClose }: any) {
     });
   };
 
+  const deletePhase = (idx: number) => {
+    setLocalPhases((prev: any) => {
+      const next = prev.filter((p: any, i: number) => i !== idx);
+      // Recascade dates for remaining phases
+      for (let i = 1; i < next.length; i++) {
+        const dur = diffDays(next[i].start, next[i].end);
+        next[i] = { ...next[i], start: addDays(next[i-1].end, 1), end: addDays(addDays(next[i-1].end, 1), dur) };
+      }
+      return next;
+    });
+  };
+
+  const addPhase = () => {
+    setLocalPhases((prev: any) => {
+      const lastPhase = prev[prev.length - 1];
+      const newStart = addDays(lastPhase.end, 1);
+      const newEnd = addDays(newStart, 27);
+      const phaseNum = parseInt(lastPhase.id.slice(1)) + 1;
+      const newPhase = {
+        id: `P${phaseNum}`,
+        label: `New Phase`,
+        color: "#6366f1",
+        light: "#e0e7ff",
+        start: newStart,
+        end: newEnd
+      };
+      return [...prev, newPhase];
+    });
+  };
+
   return (
     <Modal title="Edit Phase Schedule" onClose={onClose} width={620}>
       <div style={{ marginBottom:12,padding:"8px 12px",background:"#f0f9ff",borderRadius:6,border:"1px solid #bae6fd",fontSize:11,color:"#0369a1" }}>
@@ -206,10 +238,15 @@ function PhaseEditModal({ phases, onSave, onClose }: any) {
               <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
                 <div style={{ width:10,height:10,borderRadius:2,background:p.color,flexShrink:0 }}/>
                 <span style={{ fontWeight:800,fontSize:12,color:p.color }}>{p.id}</span>
-                <span style={{ fontWeight:700,fontSize:12,color:"#1e3a5f" }}>{p.label}</span>
+                <input type="text" value={p.label} onChange={(e)=>updatePhase(idx,"label",e.target.value)} style={{ ...iS, flex:1, fontSize:12, padding:"4px 8px" }}/>
                 <span style={{ marginLeft:"auto",fontSize:11,fontWeight:700,color:"#64748b",background:"#fff",padding:"2px 8px",borderRadius:10,border:"1px solid #e2e8f0" }}>
                   {dur} days
                 </span>
+                {localPhases.length > 1 && (
+                  <button onClick={()=>deletePhase(idx)} style={{ background:"#fecaca",border:"none",color:"#dc2626",borderRadius:4,padding:"4px 8px",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit" }}>
+                    Delete
+                  </button>
+                )}
               </div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 12px" }}>
                 <Field label="Start Date">
@@ -230,6 +267,9 @@ function PhaseEditModal({ phases, onSave, onClose }: any) {
           );
         })}
       </div>
+      <button onClick={addPhase} style={{ padding:"8px 16px",borderRadius:6,border:"1px solid #2563eb",background:"#2563eb",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",marginBottom:12,width:"100%" }}>
+        + Add Phase
+      </button>
       <div style={{ marginTop:14, padding:"8px 12px", background:"#f8fafc", borderRadius:6, fontSize:11, color:"#475569" }}>
         Project span: <strong>{fmtDate(localPhases[0].start)}</strong> → <strong>{fmtDate(localPhases[localPhases.length-1].end)}</strong>
         &nbsp;·&nbsp; Total: <strong>{diffDays(localPhases[0].start, localPhases[localPhases.length-1].end) + 1} days</strong>
@@ -244,7 +284,7 @@ function PhaseEditModal({ phases, onSave, onClose }: any) {
 
 /* ─── TASK FORM ─────────────────────────────────────────────────────── */
 function TaskForm({ initial, onSave, onClose, allEpics, phases }: any) {
-  const blank = { phaseId:"P1", epic:"", task:"", owner:"", start: phases[0].start, end: phases[0].end, color:"#3b82f6" };
+  const blank = { phaseId:"P1", epic:"", task:"", owner:"", status:"Planned", start: phases[0].start, end: phases[0].end, color:"#3b82f6" };
   const [f, setF] = useState(initial ? { ...initial } : blank);
   const set = (k: string) => (e: any) => setF((p: any) => ({ ...p, [k]: e.target.value }));
   const ph = phases.find((p: any) => p.id === f.phaseId) || phases[0];
@@ -269,7 +309,18 @@ function TaskForm({ initial, onSave, onClose, allEpics, phases }: any) {
       </div>
       <Field label="Epic / Workstream"><input list="ep-opts" value={f.epic} onChange={set("epic")} placeholder="Type or pick…" style={iS}/><datalist id="ep-opts">{epics.map((e: string)=><option key={e} value={e}/>)}</datalist></Field>
       <Field label="Task"><textarea value={f.task} onChange={set("task")} rows={2} style={{ ...iS,resize:"vertical",lineHeight:1.5 }}/></Field>
-      <Field label="Owner"><input value={f.owner} onChange={set("owner")} placeholder="e.g. Partner + Client" style={iS}/></Field>
+      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 12px" }}>
+        <Field label="Owner"><input value={f.owner} onChange={set("owner")} placeholder="e.g. Partner + Client" style={iS}/></Field>
+        <Field label="Status">
+          <select value={f.status} onChange={set("status")} style={iS}>
+            <option value="Planned">Planned</option>
+            <option value="In Progress">In Progress</option>
+            <option value="Completed">Completed</option>
+            <option value="On Hold">On Hold</option>
+            <option value="At Risk">At Risk</option>
+          </select>
+        </Field>
+      </div>
       <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 12px" }}>
         <Field label="Start Date"><input type="date" value={f.start} onChange={set("start")} min={ph.start} max={ph.end} style={iS}/></Field>
         <Field label="End Date"><input type="date" value={f.end} onChange={set("end")} min={f.start} max={ph.end} style={iS}/></Field>
@@ -297,6 +348,7 @@ export default function GanttChart() {
   const [hoverRow, setHoverRow] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(typeof window !== "undefined" && window.innerWidth < 768);
+  const [viewMode, setViewMode] = useState<"week" | "month">("month");
 
   const headerScrollRef = useRef<HTMLDivElement>(null);
   const bodyScrollRef = useRef<HTMLDivElement>(null);
@@ -347,26 +399,55 @@ export default function GanttChart() {
   const yearStart = "2026-01-01";
   const yearEnd = "2026-12-31";
   
-  const LIST_W = isMobile ? 200 : 300;
-  const INFO_W = isMobile ? 60 : 86;
+  const LIST_W = isMobile ? 160 : 200;
+  const OWNER_W = isMobile ? 100 : 130;
+  const STATUS_W = isMobile ? 80 : 110;
+  const INFO_W = isMobile ? 60 : 80;
   const SIDE_W = isMobile ? 0 : 168;
-  const PX_PER_DAY = isMobile ? 4 : 5.2;
+  
+  // Adjust scaling based on view mode
+  const baseSize = isMobile ? 4 : 5.2;
+  const PX_PER_UNIT = viewMode === "week" ? baseSize * 7 : baseSize * 30.5;
   
   const totalDays = diffDays(yearStart, yearEnd) + 1;
-  const TOTAL_W = Math.ceil(totalDays * PX_PER_DAY);
+  const totalUnits = viewMode === "week" ? Math.ceil(totalDays / 7) : Math.ceil(totalDays / 30.5);
+  const TOTAL_W = Math.ceil(totalUnits * PX_PER_UNIT);
 
-  function toX(dateStr: string): number { return Math.max(0, diffDays(yearStart, dateStr)) * PX_PER_DAY; }
-  function toW(s: string, e: string): number { return Math.max((diffDays(s, e) + 1) * PX_PER_DAY, 6); }
-
-  // Build month ticks for all 12 months of 2026
-  const monthTicks: {label: string, date: string}[] = [];
-  for (let month = 0; month < 12; month++) {
-    const date = new Date(2026, month, 1);
-    monthTicks.push({ 
-      label: date.toLocaleDateString("en-US",{month:"short"}), 
-      date: fmtISO(date) 
-    });
+  function toX(dateStr: string): number { 
+    const days = Math.max(0, diffDays(yearStart, dateStr));
+    const units = viewMode === "week" ? days / 7 : days / 30.5;
+    return units * PX_PER_UNIT; 
   }
+  function toW(s: string, e: string): number { 
+    const days = Math.max((diffDays(s, e) + 1), 1);
+    const units = viewMode === "week" ? days / 7 : days / 30.5;
+    return Math.max(units * PX_PER_UNIT, 4); 
+  }
+
+  // Build ticks based on view mode
+  const ticks: {label: string, date: string}[] = [];
+  if (viewMode === "week") {
+    const start = new Date(2026, 0, 1);
+    let current = new Date(start);
+    let weekNum = 1;
+    while (current.getFullYear() === 2026) {
+      ticks.push({
+        label: `W${weekNum}`,
+        date: fmtISO(current)
+      });
+      current = new Date(current.getTime() + 7 * 24 * 60 * 60 * 1000);
+      weekNum++;
+    }
+  } else {
+    for (let month = 0; month < 12; month++) {
+      const date = new Date(2026, month, 1);
+      ticks.push({ 
+        label: date.toLocaleDateString("en-US",{month:"short",year:"2-digit"}), 
+        date: fmtISO(date) 
+      });
+    }
+  }
+  const monthTicks = ticks;
 
   const isPOpen = (id: string) => phaseOpen[id] !== false;
   const isEOpen = (k: string) => epicOpen[k] !== false;
@@ -458,6 +539,29 @@ export default function GanttChart() {
         <button className="phaseeditbtn toolbar-btn" onClick={()=>setModal({mode:"editPhases"})} style={{ display:"flex",alignItems:"center",gap:5,padding:"4px 11px",borderRadius:4,border:"1px solid #d1d5db",background:"#f9fafb",color:"#374151",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .12s" }}>
           📅 <span style={{display: isMobile ? "none" : "inline"}}>Edit Dates</span>
         </button>
+        {/* View Mode Toggle */}
+        <div style={{ display:"flex",gap:2 }}>
+          {(["week","month"] as const).map(mode => (
+            <button
+              key={mode}
+              onClick={() => setViewMode(mode)}
+              style={{
+                padding:"4px 8px",
+                borderRadius:4,
+                border:viewMode === mode ? "1px solid #2563eb" : "1px solid #d1d5db",
+                background:viewMode === mode ? "#2563eb" : "#f9fafb",
+                color:viewMode === mode ? "#fff" : "#374151",
+                fontSize:11,
+                fontWeight:600,
+                cursor:"pointer",
+                fontFamily:"inherit",
+                transition:"all .12s"
+              }}
+            >
+              {mode.charAt(0).toUpperCase() + mode.slice(1)}
+            </button>
+          ))}
+        </div>
         {isMobile && (
           <button onClick={() => setSidebarOpen(!sidebarOpen)} style={{ marginLeft:"auto",padding:"4px 10px",borderRadius:4,border:"1px solid #d1d5db",background:"#f9fafb",color:"#374151",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit" }}>
             {sidebarOpen ? "✕ Close" : "📋 Info"}
@@ -484,62 +588,6 @@ export default function GanttChart() {
       {/* BODY */}
       <div style={{ flex:1,display:"flex",overflow:"hidden",minHeight:0 }}>
 
-        {/* DETAIL SIDEBAR - Mobile overlay or desktop side panel */}
-        {(!isMobile || sidebarOpen) && (
-          <>
-            {isMobile && <div onClick={() => setSidebarOpen(false)} style={{ position:"fixed",inset:0,zIndex:40,background:"rgba(0,0,0,0.3)" }}/>}
-            <div style={{ width:isMobile ? "100%" : SIDE_W, maxWidth:isMobile ? 280 : SIDE_W, background:"#fff",borderRight:isMobile?"none":"1px solid #dde3ed",display:"flex",flexDirection:"column",flexShrink:0,overflow:"hidden",position:isMobile?"fixed":"static",zIndex:50,left:0,top:isMobile?40:0,height:isMobile?"calc(100vh - 40px)":"100%",bottom:0 }}>
-              <div style={{ padding:"8px 10px",borderBottom:"1px solid #f1f5f9",background:"#f8fafc" }}>
-                <span style={{ fontSize:10,fontWeight:800,color:"#1e3a5f",textTransform:"uppercase",letterSpacing:".08em" }}>Task Details</span>
-              </div>
-              {selTask ? (
-                <div style={{ padding:"10px",fontSize:11,flex:1,overflowY:"auto" }}>
-                  <div style={{ fontWeight:700,color:"#0f172a",fontSize:12,lineHeight:1.4,marginBottom:8 }}>{selTask.task}</div>
-                  <div style={{ height:1,background:"#f1f5f9",marginBottom:8 }}/>
-                  {[
-                    ["Phase", phases.find(p=>p.id===selTask.phaseId)?.label],
-                    ["Epic", selTask.epic],
-                    ["Owner", selTask.owner],
-                    ["Start", fmtDate(selTask.start)],
-                    ["End", fmtDate(selTask.end)],
-                    ["Duration", diffDays(selTask.start,selTask.end)+1 + " days"],
-                  ].map(([k,v])=>(
-                    <div key={k} style={{ marginBottom:6 }}>
-                      <div style={{ fontSize:9,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".06em" }}>{k}</div>
-                      <div style={{ fontWeight:600,color:"#334155",fontSize:11,marginTop:1 }}>{v}</div>
-                    </div>
-                  ))}
-                  <div style={{ height:1,background:"#f1f5f9",margin:"8px 0" }}/>
-                  <div style={{ display:"flex",gap:5 }}>
-                    <button onClick={()=>{setModal({mode:"edit",task:selTask});isMobile&&setSidebarOpen(false)}} style={{ flex:1,padding:"5px",borderRadius:5,border:"1px solid #2563eb",background:"#eff6ff",color:"#2563eb",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"inherit" }}>Edit</button>
-                    <button onClick={()=>{setModal({mode:"delete",task:selTask});isMobile&&setSidebarOpen(false)}} style={{ flex:1,padding:"5px",borderRadius:5,border:"1px solid #fca5a5",background:"#fff",color:"#dc2626",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"inherit" }}>Delete</button>
-                  </div>
-                </div>
-              ) : (
-                <div style={{ padding:"20px 10px",textAlign:"center",color:"#94a3b8",fontSize:11,lineHeight:1.6 }}>
-                  <div style={{ fontSize:22,marginBottom:6 }}>📋</div>
-                  Click a task to see details
-                </div>
-              )}
-              <div style={{ padding:"8px 10px",borderTop:"1px solid #f1f5f9",marginTop:"auto",overflowY:"auto" }}>
-                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6 }}>
-                  <span style={{ fontSize:9,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".07em" }}>Phase Schedule</span>
-                  <button onClick={()=>setModal({mode:"editPhases"})} style={{ fontSize:9,color:"#2563eb",background:"none",border:"none",cursor:"pointer",fontWeight:700,fontFamily:"inherit" }}>Edit ✏️</button>
-                </div>
-                {phases.map(p=>(
-                  <div key={p.id} style={{ display:"flex",alignItems:"flex-start",gap:5,marginBottom:5 }}>
-                    <div style={{ width:8,height:8,borderRadius:2,background:p.color,flexShrink:0,marginTop:2 }}/>
-                    <div>
-                      <div style={{ fontSize:10,color:"#1e3a5f",fontWeight:700 }}>{p.id} {p.label}</div>
-                      <div style={{ fontSize:9,color:"#64748b" }}>{fmtShort(p.start)} – {fmtShort(p.end)} · {diffDays(p.start,p.end)+1}d</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </>
-        )}
-
         {/* GANTT TABLE */}
         <div style={{ flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minWidth:0 }}>
 
@@ -549,6 +597,8 @@ export default function GanttChart() {
             <div style={{ display:"flex",flexShrink:0,zIndex:11,background:"#f8fafc" }}>
               <div style={{ width:LIST_W,display:"flex",alignItems:"center",padding:"0 10px",borderRight:"1px solid #dde3ed",fontSize:isMobile?9:10,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:".07em",height:"100%" }}>{isMobile?"Task":"Name"}</div>
               {!isMobile && <>
+                <div style={{ width:OWNER_W,display:"flex",alignItems:"center",padding:"0 8px",borderRight:"1px solid #dde3ed",fontSize:10,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:".07em",height:"100%" }}>Owner</div>
+                <div style={{ width:STATUS_W,display:"flex",alignItems:"center",padding:"0 8px",borderRight:"1px solid #dde3ed",fontSize:10,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:".07em",height:"100%" }}>Status</div>
                 <div style={{ width:INFO_W,display:"flex",alignItems:"center",padding:"0 8px",borderRight:"1px solid #dde3ed",fontSize:10,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:".07em",height:"100%" }}>Start</div>
                 <div style={{ width:INFO_W,display:"flex",alignItems:"center",padding:"0 8px",borderRight:"1px solid #dde3ed",fontSize:10,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:".07em",height:"100%" }}>Finish</div>
               </>}
@@ -622,6 +672,18 @@ export default function GanttChart() {
                         <button className="ib" onClick={e=>{e.stopPropagation();setModal({mode:"delete",task:t})}}><svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M3 4h10M6 4V3h4v1M5 4l.5 9h5l.5-9" stroke="#dc2626" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg></button>
                       </div>}
                     </div>
+                    {/* Owner - hidden on mobile */}
+                    {!isMobile && (
+                    <div style={{ width:OWNER_W,display:"flex",alignItems:"center",padding:"0 8px",borderRight:"1px solid #edf0f5",fontSize:10,color:"#64748b",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>
+                      {isTask?t.owner:""}
+                    </div>
+                    )}
+                    {/* Status - hidden on mobile */}
+                    {!isMobile && (
+                    <div style={{ width:STATUS_W,display:"flex",alignItems:"center",padding:"0 8px",borderRight:"1px solid #edf0f5",fontSize:10,color:"#64748b",whiteSpace:"nowrap",overflow:"hidden" }}>
+                      {isTask?t.status||"Planned":""}
+                    </div>
+                    )}
                     {/* Start - hidden on mobile */}
                     {!isMobile && (
                     <div style={{ width:INFO_W,display:"flex",alignItems:"center",padding:"0 8px",borderRight:"1px solid #edf0f5",fontSize:10,color:"#64748b",whiteSpace:"nowrap",overflow:"hidden" }}>
@@ -638,7 +700,7 @@ export default function GanttChart() {
                 );
               })}
               {/* milestone footer frozen part */}
-              <div style={{ height:isMobile?20:30,borderTop:"2px solid #dde3ed",background:"#f8fafc",display:"flex",alignItems:"center",padding:"0 10px",fontSize:isMobile?8:9,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".08em",width:LIST_W+(isMobile?0:INFO_W*2),borderRight:"1px solid #dde3ed",flexShrink:0 }}>
+              <div style={{ height:isMobile?20:30,borderTop:"2px solid #dde3ed",background:"#f8fafc",display:"flex",alignItems:"center",padding:"0 10px",fontSize:isMobile?8:9,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".08em",width:LIST_W+(isMobile?0:OWNER_W+STATUS_W+INFO_W*2),borderRight:"1px solid #dde3ed",flexShrink:0 }}>
                 Milestones
               </div>
             </div>
@@ -662,7 +724,7 @@ export default function GanttChart() {
 
                   const phaseX=isPhase?toX(pm.start):0, phaseW=isPhase?toW(pm.start,pm.end):0;
                   const epicX=isEpic?Math.min(...(row.tasks?.map((t: any)=>toX(t.start))??[])):0;
-                  const epicW=isEpic?(Math.max(...(row.tasks?.map((t: any)=>toX(t.end)+PX_PER_DAY)??[0]))-epicX):0;
+                  const epicW=isEpic?(Math.max(...(row.tasks?.map((t: any)=>toX(t.end)+PX_PER_UNIT)??[0]))-epicX):0;
                   const taskX=isTask?toX(t.start):0, taskW=isTask?Math.max(toW(t.start,t.end),isMobile?4:8):0;
 
                   return (
