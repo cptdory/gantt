@@ -294,6 +294,9 @@ export default function GanttChart() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(typeof window !== "undefined" && window.innerWidth < 768);
   const [viewMode, setViewMode] = useState<"day" | "week" | "month">("month");
+  const [columnWidths, setColumnWidths] = useState({ list: isMobile ? 160 : 210, owner: isMobile ? 100 : 130, status: isMobile ? 80 : 110, info: isMobile ? 60 : 80 });
+  const [resizingColumn, setResizingColumn] = useState<string | null>(null);
+  const [resizeStart, setResizeStart] = useState<number>(0);
 
   const headerScrollRef = useRef<HTMLDivElement>(null);
   const bodyScrollRef = useRef<HTMLDivElement>(null);
@@ -307,6 +310,45 @@ export default function GanttChart() {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  // Resizing logic
+  const startResize = (e: React.MouseEvent, colName: string) => {
+    e.preventDefault();
+    setResizingColumn(colName);
+    setResizeStart(e.clientX);
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!resizingColumn) return;
+      const delta = e.clientX - resizeStart;
+      const minWidth = 60;
+      
+      setColumnWidths(prev => {
+        const newWidths = { ...prev };
+        const currentWidth = newWidths[resizingColumn as keyof typeof newWidths];
+        const newWidth = Math.max(minWidth, currentWidth + delta);
+        (newWidths as any)[resizingColumn] = newWidth;
+        return newWidths;
+      });
+      setResizeStart(e.clientX);
+    };
+
+    const handleMouseUp = () => {
+      setResizingColumn(null);
+    };
+
+    if (resizingColumn) {
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "col-resize";
+      return () => {
+        document.removeEventListener("mousemove", handleMouseMove);
+        document.removeEventListener("mouseup", handleMouseUp);
+        document.body.style.cursor = "default";
+      };
+    }
+  }, [resizingColumn, resizeStart]);
 
   const onHeaderScroll = useCallback(() => {
     if (syncingRef.current) return;
@@ -350,10 +392,10 @@ export default function GanttChart() {
   const yearStart = "2026-01-01";
   const yearEnd = "2026-12-31";
 
-  const LIST_W = isMobile ? 160 : 210;
-  const OWNER_W = isMobile ? 100 : 130;
-  const STATUS_W = isMobile ? 80 : 110;
-  const INFO_W = isMobile ? 60 : 80;
+  const LIST_W = columnWidths.list;
+  const OWNER_W = columnWidths.owner;
+  const STATUS_W = columnWidths.status;
+  const INFO_W = columnWidths.info;
 
   const baseSize = isMobile ? 4 : 5.4;
   const PX_PER_UNIT = viewMode === "day" ? baseSize * 1 : viewMode === "week" ? baseSize * 7 : baseSize * 30.5;
@@ -483,6 +525,10 @@ export default function GanttChart() {
         .ib:hover{background:rgba(0,0,0,0.08)}
         .gbar{position:absolute;border-radius:5px;display:flex;align-items:center;padding:0 6px;overflow:hidden;cursor:pointer;transition:filter .15s,box-shadow .15s,transform .12s;white-space:nowrap}
         .gbar:hover{filter:brightness(.9);transform:scaleY(1.04)}
+        .col-header{position:relative;display:flex;align-items:center;padding:0 10px;border-right:1px solid #e4e9f2;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.1em;height:100%}
+        .resize-handle{position:absolute;right:-4px;top:0;bottom:0;width:8px;cursor:col-resize;user-select:none;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s}
+        .col-header:hover .resize-handle{opacity:1}
+        .resize-handle::after{content:'';width:1px;height:60%;background:#2563eb;border-radius:1px}
         select:focus,input:focus,textarea:focus{outline:none;border-color:#2563eb!important;box-shadow:0 0 0 3px rgba(37,99,235,.12)!important}
         .toolbar-btn{transition:all .15s!important}
         .toolbar-btn:hover{transform:translateY(-1px)!important;box-shadow:0 3px 10px rgba(0,0,0,.1)!important}
@@ -557,14 +603,26 @@ export default function GanttChart() {
           <div style={{ display:"flex",flexShrink:0,height:isMobile?42:56,background:"#f8fafc",borderBottom:"2px solid #e4e9f2",zIndex:10 }}>
             {/* Frozen left header */}
             <div style={{ display:"flex",flexShrink:0,zIndex:11,background:"#f8fafc" }}>
-              <div style={{ width:LIST_W,display:"flex",alignItems:"center",padding:"0 12px",borderRight:"1px solid #e4e9f2",fontSize:10,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".1em",height:"100%",gap:6 }}>
+              <div className="col-header" style={{ width:LIST_W,gap:6 }}>
                 <span style={{ opacity:0.5 }}>⋮⋮</span>{isMobile?"Task":"Name / Task"}
+                <div className="resize-handle" onMouseDown={e => startResize(e, "list")}/>
               </div>
               {!isMobile && <>
-                <div style={{ width:OWNER_W,display:"flex",alignItems:"center",padding:"0 10px",borderRight:"1px solid #e4e9f2",fontSize:10,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".1em",height:"100%" }}>Owner</div>
-                <div style={{ width:STATUS_W,display:"flex",alignItems:"center",padding:"0 10px",borderRight:"1px solid #e4e9f2",fontSize:10,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".1em",height:"100%" }}>Status</div>
-                <div style={{ width:INFO_W,display:"flex",alignItems:"center",padding:"0 10px",borderRight:"1px solid #e4e9f2",fontSize:10,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".1em",height:"100%" }}>Start</div>
-                <div style={{ width:INFO_W,display:"flex",alignItems:"center",padding:"0 10px",borderRight:"1px solid #e4e9f2",fontSize:10,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".1em",height:"100%" }}>End</div>
+                <div className="col-header" style={{ width:OWNER_W }}>
+                  Owner
+                  <div className="resize-handle" onMouseDown={e => startResize(e, "owner")}/>
+                </div>
+                <div className="col-header" style={{ width:STATUS_W }}>
+                  Status
+                  <div className="resize-handle" onMouseDown={e => startResize(e, "status")}/>
+                </div>
+                <div className="col-header" style={{ width:INFO_W }}>
+                  Start
+                  <div className="resize-handle" onMouseDown={e => startResize(e, "info")}/>
+                </div>
+                <div className="col-header" style={{ width:INFO_W }}>
+                  End
+                </div>
               </>}
             </div>
             {/* Scrollable timeline header */}
@@ -695,7 +753,7 @@ export default function GanttChart() {
                     </div>
                     {/* Owner */}
                     {!isMobile && (
-                      <div style={{ width:OWNER_W,display:"flex",alignItems:"center",padding:"0 10px",borderRight:"1px solid #edf0f7",fontSize:10,color:"#64748b",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",gap:5 }}>
+                      <div style={{ width:OWNER_W,display:"flex",alignItems:"center",padding:"0 10px",borderRight:"1px solid #edf0f7",fontSize:10,color:"#64748b",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",gap:5,position:"relative" }}>
                         {isTask && <>
                           <div style={{ width:16,height:16,borderRadius:"50%",background:`${t.color||pm.color}22`,border:`1.5px solid ${t.color||pm.color}55`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:700,color:t.color||pm.color,flexShrink:0 }}>
                             {t.owner.charAt(0).toUpperCase()}
@@ -706,7 +764,7 @@ export default function GanttChart() {
                     )}
                     {/* Status */}
                     {!isMobile && (
-                      <div style={{ width:STATUS_W,display:"flex",alignItems:"center",padding:"0 10px",borderRight:"1px solid #edf0f7",fontSize:10,whiteSpace:"nowrap",overflow:"hidden" }}>
+                      <div style={{ width:STATUS_W,display:"flex",alignItems:"center",padding:"0 10px",borderRight:"1px solid #edf0f7",fontSize:10,whiteSpace:"nowrap",overflow:"hidden",position:"relative" }}>
                         {isTask && statusStyle && (
                           <span style={{ display:"flex",alignItems:"center",gap:4,padding:"2px 8px",borderRadius:12,background:statusStyle.bg,color:statusStyle.color,fontSize:10,fontWeight:600,border:`1px solid ${statusStyle.dot}30` }}>
                             <span style={{ width:5,height:5,borderRadius:"50%",background:statusStyle.dot,display:"inline-block",flexShrink:0 }}/>
@@ -717,7 +775,7 @@ export default function GanttChart() {
                     )}
                     {/* Start */}
                     {!isMobile && (
-                      <div style={{ width:INFO_W,display:"flex",alignItems:"center",padding:"0 10px",borderRight:"1px solid #edf0f7",fontSize:10,color:"#64748b",whiteSpace:"nowrap" }}>
+                      <div style={{ width:INFO_W,display:"flex",alignItems:"center",padding:"0 10px",borderRight:"1px solid #edf0f7",fontSize:10,color:"#64748b",whiteSpace:"nowrap",position:"relative" }}>
                         {isTask?fmtShort(t.start):isPhase?<span style={{fontWeight:700,color:pm.color}}>{fmtShort(pm.start)}</span>:""}
                       </div>
                     )}
