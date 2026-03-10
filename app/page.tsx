@@ -1,6 +1,8 @@
 
 "use client";
 import { useState, useRef, useCallback, useEffect } from "react";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
 
 /* ─── DATE HELPERS ──────────────────────────────────────────────────── */
 function addDays(dateStr: string, n: number): string {
@@ -19,105 +21,14 @@ function fmtShort(d: string): string {
 }
 function fmtISO(d: string | Date): string { return new Date(d).toISOString().slice(0, 10); }
 
-/* ─── INITIAL PHASE CONFIG ──────────────────────────────────────────── */
-// Each phase: start, durationDays (end = start + durationDays - 1)
-const PHASE_DEFAULTS = [
-  { id: "P1", label: "Discovery & Planning",  color: "#3b82f6", light: "#dbeafe", durationDays: 28 },
-  { id: "P2", label: "Analysis & Design",     color: "#7c3aed", light: "#ede9fe", durationDays: 31 },
-  { id: "P3", label: "Development & Build",   color: "#0891b2", light: "#cffafe", durationDays: 61 },
-  { id: "P4", label: "Testing & Migration",   color: "#d97706", light: "#fef3c7", durationDays: 30 },
-  { id: "P5", label: "UAT & Training",        color: "#059669", light: "#d1fae5", durationDays: 31 },
-  { id: "P6", label: "Go-Live & Hypercare",   color: "#dc2626", light: "#fee2e2", durationDays: 31 },
-];
-
-// Build initial phase schedule from P1 start = Feb 16 2026, phases consecutive
-function buildPhaseSchedule(p1Start: string, phaseDefs: typeof PHASE_DEFAULTS) {
-  let cursor = p1Start;
-  return phaseDefs.map(p => {
-    const start = cursor;
-    const end = addDays(start, p.durationDays - 1);
-    cursor = addDays(end, 1);
-    return { ...p, start, end };
-  });
-}
-
-const INITIAL_PHASES = buildPhaseSchedule("2026-02-16", PHASE_DEFAULTS);
-
 // Derive per-task initial start/end as offsets within each phase
 // offsets are stored as [startOffset, endOffset] from phase start
-const TASK_DEFS = [
-  /* P1 */
-  {phaseId:"P1",epic:"Project Initiation & Planning",task:"Project alignment meeting",owner:"Partner + Client Exec",so:0,eo:4,color:"#3b82f6"},
-  {phaseId:"P1",epic:"Project Initiation & Planning",task:"Conduct high-level discovery sessions",owner:"Partner + Client Exec",so:7,eo:13,color:"#3b82f6"},
-  {phaseId:"P1",epic:"Project Initiation & Planning",task:"Define project scope",owner:"Partner",so:14,eo:20,color:"#3b82f6"},
-  {phaseId:"P1",epic:"Project Initiation & Planning",task:"Define project objectives",owner:"Partner",so:21,eo:27,color:"#3b82f6"},
-  /* P2 */
-  {phaseId:"P2",epic:"Analysis & Design",task:"Business process mapping workshops",owner:"Partner + Client Process Owners",so:0,eo:6,color:"#7c3aed"},
-  {phaseId:"P2",epic:"Analysis & Design",task:"Identify bottlenecks, workarounds, and pain points",owner:"Partner + Client Process Owners",so:0,eo:6,color:"#7c3aed"},
-  {phaseId:"P2",epic:"Analysis & Design",task:"Convert findings into AS-IS and TO-BE process maps",owner:"Partner",so:7,eo:13,color:"#7c3aed"},
-  {phaseId:"P2",epic:"Analysis & Design",task:"Review PH-specific requirements (BIR, WHT, VAT, payroll)",owner:"Partner",so:7,eo:13,color:"#7c3aed"},
-  {phaseId:"P2",epic:"Analysis & Design",task:"Assess fit against BC Essentials standard features",owner:"Partner",so:14,eo:20,color:"#7c3aed"},
-  {phaseId:"P2",epic:"Analysis & Design",task:"Identify gaps requiring config, extension, or integration",owner:"Partner",so:14,eo:20,color:"#7c3aed"},
-  {phaseId:"P2",epic:"Analysis & Design",task:"Gather and document functional requirements per module",owner:"Partner",so:21,eo:25,color:"#7c3aed"},
-  {phaseId:"P2",epic:"Analysis & Design",task:"Gather and document technical requirements per module",owner:"Partner",so:21,eo:25,color:"#7c3aed"},
-  {phaseId:"P2",epic:"Analysis & Design",task:"Send documents for client sign-off",owner:"Partner + Client Exec",so:26,eo:30,color:"#7c3aed"},
-  /* P3 */
-  {phaseId:"P3",epic:"Environment & Foundation Setup",task:"Create Production and Sandbox environments",owner:"Partner",so:0,eo:6,color:"#0891b2"},
-  {phaseId:"P3",epic:"Environment & Foundation Setup",task:"Enable required feature management settings",owner:"Partner",so:0,eo:6,color:"#0891b2"},
-  {phaseId:"P3",epic:"Environment & Foundation Setup",task:"Set up company information for all companies",owner:"Partner + Client",so:7,eo:13,color:"#0891b2"},
-  {phaseId:"P3",epic:"Environment & Foundation Setup",task:"Define accounting periods and posting ranges",owner:"Partner + Client",so:7,eo:13,color:"#0891b2"},
-  {phaseId:"P3",epic:"Environment & Foundation Setup",task:"Configure PH VAT handling (12%, zero-rated, exempt)",owner:"Partner + Client",so:14,eo:20,color:"#0891b2"},
-  {phaseId:"P3",epic:"Finance Configuration",task:"Finalize and import Chart of Accounts",owner:"Partner + Client",so:0,eo:13,color:"#0891b2"},
-  {phaseId:"P3",epic:"Finance Configuration",task:"Define general posting setup and map accounts",owner:"Partner + Client",so:14,eo:27,color:"#0891b2"},
-  {phaseId:"P3",epic:"Finance Configuration",task:"Create VAT business and product posting groups",owner:"Partner",so:14,eo:20,color:"#0891b2"},
-  {phaseId:"P3",epic:"Finance Configuration",task:"Set LCY to PHP and add foreign currencies",owner:"Partner + Client",so:21,eo:27,color:"#0891b2"},
-  {phaseId:"P3",epic:"Finance Configuration",task:"Configure global and shortcut dimensions",owner:"Partner + Client",so:28,eo:34,color:"#0891b2"},
-  {phaseId:"P3",epic:"Finance Configuration",task:"Create bank accounts and reconciliation setup",owner:"Partner + Client",so:28,eo:34,color:"#0891b2"},
-  {phaseId:"P3",epic:"Finance Configuration",task:"Configure fixed asset posting groups and depreciation",owner:"Partner + Client",so:35,eo:41,color:"#0891b2"},
-  {phaseId:"P3",epic:"Sales (Customer-to-Cash)",task:"Configure customer posting groups and VAT groups",owner:"Partner + Client",so:0,eo:13,color:"#0891b2"},
-  {phaseId:"P3",epic:"Sales (Customer-to-Cash)",task:"Configure sales price lists and discounts",owner:"Partner + Client",so:14,eo:27,color:"#0891b2"},
-  {phaseId:"P3",epic:"Purchasing (Procure-to-Pay)",task:"Configure vendor numbering and posting groups",owner:"Partner + Client",so:0,eo:13,color:"#0891b2"},
-  {phaseId:"P3",epic:"Purchasing (Procure-to-Pay)",task:"Define item charges (freight, customs, brokerage)",owner:"Partner + Client",so:14,eo:27,color:"#0891b2"},
-  {phaseId:"P3",epic:"Inventory",task:"Configure item master (UoM, costing, posting groups)",owner:"Partner + Client",so:28,eo:41,color:"#0891b2"},
-  {phaseId:"P3",epic:"Inventory",task:"Create inventory locations and bins",owner:"Partner",so:28,eo:41,color:"#0891b2"},
-  {phaseId:"P3",epic:"Consolidation & Intercompany",task:"Create consolidation company and map subsidiary COA",owner:"Partner + Client",so:42,eo:48,color:"#0891b2"},
-  {phaseId:"P3",epic:"Workflows, Security & Controls",task:"Set up procurement and sales approval workflows",owner:"Partner + Client",so:42,eo:48,color:"#0891b2"},
-  {phaseId:"P3",epic:"Workflows, Security & Controls",task:"Build role-based permission sets per function",owner:"Partner + Client IT",so:49,eo:55,color:"#0891b2"},
-  {phaseId:"P3",epic:"Reporting & Analytics",task:"Build account schedules (Balance Sheet, P&L, Cash Flow)",owner:"Partner + Client",so:42,eo:55,color:"#0891b2"},
-  {phaseId:"P3",epic:"Reporting & Analytics",task:"Enable Power BI datasets and publish key visuals",owner:"Partner",so:49,eo:55,color:"#0891b2"},
-  {phaseId:"P3",epic:"Development",task:"Develop approved customizations and extensions",owner:"Partner Dev Team",so:0,eo:60,color:"#0891b2"},
-  /* P4 */
-  {phaseId:"P4",epic:"Data Migration",task:"Prepare and cleanse customer master data",owner:"Client + Partner",so:0,eo:6,color:"#d97706"},
-  {phaseId:"P4",epic:"Data Migration",task:"Prepare and cleanse vendor master data",owner:"Client + Partner",so:0,eo:6,color:"#d97706"},
-  {phaseId:"P4",epic:"Data Migration",task:"Prepare and cleanse item and fixed asset master data",owner:"Client + Partner",so:7,eo:13,color:"#d97706"},
-  {phaseId:"P4",epic:"Data Migration",task:"Prepare and cleanse bank account master data",owner:"Client + Partner",so:7,eo:13,color:"#d97706"},
-  {phaseId:"P4",epic:"Functional Testing",task:"Test sample postings (sales, purchase, inventory, GL, VAT)",owner:"Partner",so:14,eo:22,color:"#d97706"},
-  {phaseId:"P4",epic:"Functional Testing",task:"Test all approved customizations",owner:"Partner",so:23,eo:29,color:"#d97706"},
-  /* P5 */
-  {phaseId:"P5",epic:"UAT",task:"Execute end-to-end UAT scenarios",owner:"Client + Partner",so:0,eo:15,color:"#059669"},
-  {phaseId:"P5",epic:"Training",task:"Deliver role-based training (AR, AP, GL, Sales, Purchasing)",owner:"Partner + Client",so:16,eo:25,color:"#059669"},
-  {phaseId:"P5",epic:"Training",task:"Provide quick guides and support during feedback",owner:"Partner",so:25,eo:30,color:"#059669"},
-  /* P6 */
-  {phaseId:"P6",epic:"Cutover & Go-Live",task:"Freeze master data and execute final data loads",owner:"Partner + Client",so:0,eo:6,color:"#dc2626"},
-  {phaseId:"P6",epic:"Cutover & Go-Live",task:"Load open customer and vendor entries",owner:"Partner + Client",so:7,eo:13,color:"#dc2626"},
-  {phaseId:"P6",epic:"Cutover & Go-Live",task:"Load inventory and fixed asset balances",owner:"Partner + Client",so:14,eo:20,color:"#dc2626"},
-  {phaseId:"P6",epic:"Cutover & Go-Live",task:"Load opening trial balance by G/L and sign-off",owner:"Partner + Client",so:21,eo:27,color:"#dc2626"},
-  {phaseId:"P6",epic:"Cutover & Go-Live",task:"Conduct Go/No-Go decision meeting",owner:"Partner + Client Exec",so:28,eo:30,color:"#dc2626"},
-];
-
 function uid() { return Math.random().toString(36).slice(2, 9); }
 
-// Resolve tasks to real dates given current phase schedule
+// Tasks from Convex already have resolved start/end dates, just filter by phase
 function resolveTasks(taskDefs: any[], phases: any[]): any[] {
-  const phaseMap = Object.fromEntries(phases.map(p => [p.id, p]));
-  return taskDefs
-    .filter(td => phaseMap[td.phaseId]) // Filter out tasks from deleted phases
-    .map(td => {
-    const ph = phaseMap[td.phaseId];
-    const start = addDays(ph.start, td.so);
-    const end = addDays(ph.start, Math.min(td.eo, diffDays(ph.start, ph.end)));
-    return { ...td, id: td.id || uid(), start, end, status: td.status || "Planned" };
-  });
+  const phaseIds = new Set(phases.map(p => p.id));
+  return taskDefs.filter(td => phaseIds.has(td.phaseId));
 }
 
 const BAR_COLORS = ["#3b82f6","#7c3aed","#0891b2","#d97706","#059669","#dc2626","#db2777","#0d9488"];
@@ -338,8 +249,30 @@ function TaskForm({ initial, onSave, onClose, allEpics, phases }: any) {
 
 /* ─── MAIN ──────────────────────────────────────────────────────────── */
 export default function GanttChart() {
-  const [phases, setPhases] = useState(INITIAL_PHASES);
-  const [taskDefs, setTaskDefs] = useState(() => TASK_DEFS.map(t => ({ ...t, id: uid() })));
+  // Convex queries
+  const dbPhases = useQuery(api.phases.getPhases) || [];
+  const dbTasks = useQuery(api.tasks.getTasks) || [];
+  
+  // Use state for optimistic UI updates
+  const [phases, setPhases] = useState(dbPhases);
+  const [taskDefs, setTaskDefs] = useState(dbTasks);
+  
+  // Convex mutations
+  const createTaskMutation = useMutation(api.tasks.createTask);
+  const updateTaskMutation = useMutation(api.tasks.updateTask);
+  const deleteTaskMutation = useMutation(api.tasks.deleteTask);
+  const updatePhasesMutation = useMutation(api.phases.updatePhases);
+  const bulkCreateTasksMutation = useMutation(api.tasks.bulkCreateTasks);
+  
+  // Update local state when DB data changes
+  useEffect(() => {
+    setPhases(dbPhases);
+  }, [dbPhases]);
+  
+  useEffect(() => {
+    setTaskDefs(dbTasks);
+  }, [dbTasks]);
+  
   const [selected, setSelected] = useState<string | null>(null);
   const [phaseOpen, setPhaseOpen] = useState<Record<string, boolean>>({});
   const [epicOpen, setEpicOpen] = useState<Record<string, boolean>>({});
@@ -388,6 +321,11 @@ export default function GanttChart() {
   }, []);
 
   // Derived: resolve tasks to real dates
+  // Guard: wait for phases to load
+  if (phases.length === 0) {
+    return <div style={{ fontFamily: "'Nunito Sans','Segoe UI',sans-serif", display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: "#e8edf5", color: "#64748b" }}>Loading project data...</div>;
+  }
+
   const tasks = resolveTasks(taskDefs, phases);
   const selTask = tasks.find(t => t.id === selected);
   const allEpics = taskDefs.map(t => ({ phaseId: t.phaseId, epic: t.epic }));
@@ -474,29 +412,81 @@ export default function GanttChart() {
   const todayInRange = todayStr >= yearStart && todayStr <= yearEnd;
   const todayX = todayInRange ? toX(todayStr) : null;
 
-  const saveTask = (form: any) => {
+  const saveTask = async (form: any) => {
     const ph = phases.find((p: any) => p.id === form.phaseId);
     if (!ph) return;
     const so = diffDays(ph.start, form.start);
     const eo = diffDays(ph.start, form.end);
-    if (modal?.mode === "add") {
-      setTaskDefs((ts: any) => [...ts, { ...form, id:uid(), so, eo }]);
-    } else if (modal?.mode === "edit") {
-      setTaskDefs((ts: any) => ts.map((t: any) => t.id === modal.task.id ? { ...t, ...form, so, eo } : t));
+    
+    try {
+      if (modal?.mode === "add") {
+        const newId = uid();
+        await createTaskMutation({
+          id: newId,
+          phaseId: form.phaseId,
+          epic: form.epic,
+          task: form.task,
+          owner: form.owner,
+          color: form.color,
+          status: form.status,
+          start: form.start,
+          end: form.end,
+          so,
+          eo,
+        });
+        // Optimistic update
+        setTaskDefs((ts: any) => [...ts, { ...form, id: newId, so, eo }]);
+      } else if (modal?.mode === "edit") {
+        await updateTaskMutation({
+          id: modal.task.id,
+          phaseId: form.phaseId,
+          epic: form.epic,
+          task: form.task,
+          owner: form.owner,
+          color: form.color,
+          status: form.status,
+          start: form.start,
+          end: form.end,
+          so,
+          eo,
+        });
+        // Optimistic update
+        setTaskDefs((ts: any) => ts.map((t: any) => t.id === modal.task.id ? { ...t, ...form, so, eo } : t));
+      }
+      setModal(null);
+    } catch (error) {
+      console.error("Failed to save task:", error);
     }
-    setModal(null);
   };
 
-  const deleteTask = () => {
+  const deleteTask = async () => {
     if (!modal?.task?.id) return;
-    setTaskDefs((ts: any) => ts.filter((t: any) => t.id !== modal.task.id));
-    setModal(null);
-    if (selected === modal.task.id) setSelected(null);
+    try {
+      await deleteTaskMutation({ id: modal.task.id });
+      // Optimistic update
+      setTaskDefs((ts: any) => ts.filter((t: any) => t.id !== modal.task.id));
+      setModal(null);
+      if (selected === modal.task.id) setSelected(null);
+    } catch (error) {
+      console.error("Failed to delete task:", error);
+    }
   };
 
-  const applyPhaseChanges = (newPhases: any) => {
-    setPhases(newPhases);
-    setModal(null);
+  const applyPhaseChanges = async (newPhases: any) => {
+    try {
+      // Prepare phases array with order
+      const phasesWithOrder = newPhases.map((p: any, idx: number) => ({
+        ...p,
+        order: idx,
+      }));
+      
+      await updatePhasesMutation({ phases: phasesWithOrder });
+      // Optimistic update
+      setPhases(phasesWithOrder);
+      setModal(null);
+    } catch (error) {
+      console.error("Failed to update phases:", error);
+    }
   };
 
   return (
