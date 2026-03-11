@@ -341,6 +341,7 @@ function GanttChart() {
   const [columnWidths, setColumnWidths] = useState({ list: isMobile ? 160 : 210, owner: isMobile ? 100 : 130, status: isMobile ? 80 : 110, info: isMobile ? 60 : 80 });
   const [resizingColumn, setResizingColumn] = useState<string | null>(null);
   const [resizeStart, setResizeStart] = useState<number>(0);
+  const [datePickerState, setDatePickerState] = useState<any>(null);
 
   const headerScrollRef = useRef<HTMLDivElement>(null);
   const bodyScrollRef = useRef<HTMLDivElement>(null);
@@ -577,6 +578,20 @@ function GanttChart() {
         return update ? { ...t, order: update.order } : t;
       }));
     } catch (error) { console.error("Failed to update task order:", error); }
+  };
+
+  const handleSelectDate = async (taskId: string, newDate: string, field: 'start' | 'end') => {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+    
+    try {
+      await updateTaskMutation({
+        id: taskId,
+        [field]: newDate
+      });
+      setTaskDefs((ts: any) => ts.map((t: any) => t.id === taskId ? { ...t, [field]: newDate } : t));
+      setDatePickerState(null);
+    } catch (error) { console.error(`Failed to update task ${field}:`, error); }
   };
 
   const exportTableToExcel = () => {
@@ -1002,13 +1017,25 @@ function GanttChart() {
                     )}
                     {/* Start */}
                     {!isMobile && (
-                      <div style={{ width:INFO_W,display:"flex",alignItems:"center",padding:"0 10px",borderRight:"1px solid #edf0f7",fontSize:10,color:"#64748b",whiteSpace:"nowrap",position:"relative" }}>
+                      <div style={{ width:INFO_W,display:"flex",alignItems:"center",padding:"0 10px",borderRight:"1px solid #edf0f7",fontSize:10,color:"#64748b",whiteSpace:"nowrap",position:"relative",cursor:isDev&&isTask?"pointer":"default" }}
+                        onClick={(e)=>{
+                          if(isDev&&isTask) {
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            setDatePickerState({taskId:t.id,field:"start",x:rect.left,y:rect.bottom+4});
+                          }
+                        }}>
                         {isTask?fmtShort(t.start):isPhase?<span style={{fontWeight:700,color:pm.color}}>{fmtShort(pm.start)}</span>:""}
                       </div>
                     )}
                     {/* End */}
                     {!isMobile && (
-                      <div style={{ width:INFO_W,display:"flex",alignItems:"center",padding:"0 10px",borderRight:"1px solid #e4e9f2",fontSize:10,color:"#64748b",whiteSpace:"nowrap" }}>
+                      <div style={{ width:INFO_W,display:"flex",alignItems:"center",padding:"0 10px",borderRight:"1px solid #e4e9f2",fontSize:10,color:"#64748b",whiteSpace:"nowrap",cursor:isDev&&isTask?"pointer":"default" }}
+                        onClick={(e)=>{
+                          if(isDev&&isTask) {
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            setDatePickerState({taskId:t.id,field:"end",x:rect.left,y:rect.bottom+4});
+                          }
+                        }}>
                         {isTask?fmtShort(t.end):isPhase?<span style={{fontWeight:700,color:pm.color}}>{fmtShort(pm.end)}</span>:""}
                       </div>
                     )}
@@ -1160,6 +1187,49 @@ function GanttChart() {
             )}
           </div>
         </div>
+      )}
+
+      {/* DATE PICKER */}
+      {datePickerState && (
+        (() => {
+          const task = tasks.find(t => t.id === datePickerState.taskId);
+          if(!task) return null;
+          const currentDate = datePickerState.field === 'start' ? task.start : task.end;
+          const [yearStr, monthStr, dayStr] = currentDate.split('-');
+          let displayYear = datePickerState.displayYear !== undefined ? datePickerState.displayYear : parseInt(yearStr);
+          let displayMonth = datePickerState.displayMonth !== undefined ? datePickerState.displayMonth : (parseInt(monthStr) - 1);
+          
+          const daysInMonth = new Date(displayYear, displayMonth + 1, 0).getDate();
+          const firstDayOfMonth = new Date(displayYear, displayMonth, 1).getDay();
+          const days = [];
+          for(let i = 0; i < firstDayOfMonth; i++) days.push(null);
+          for(let i = 1; i <= daysInMonth; i++) days.push(i);
+          
+          return (
+            <div onClick={()=>setDatePickerState(null)} style={{ position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:2999,background:"rgba(0,0,0,0.3)",display:"flex",alignItems:"flex-start",justifyContent:"flex-start",paddingTop:datePickerState.y }}>
+              <div onClick={(e)=>e.stopPropagation()} style={{ position:"fixed",top:datePickerState.y,left:datePickerState.x,background:"#fff",borderRadius:10,padding:"16px",boxShadow:"0 12px 36px rgba(0,0,0,.25)",zIndex:3000,minWidth:280 }}>
+                <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12 }}>
+                  <button onClick={()=>{const newMonth=displayMonth-1;const newYear=newMonth<0?displayYear-1:displayYear;setDatePickerState({...datePickerState,displayYear:newYear,displayMonth:newMonth<0?11:newMonth})}} style={{ background:"none",border:"none",cursor:"pointer",fontSize:14,color:"#334155",fontWeight:600 }}>◀</button>
+                  <div style={{ fontSize:12,fontWeight:700,color:"#334155" }}>{new Date(displayYear,displayMonth).toLocaleDateString("en-US",{month:"long",year:"numeric"})}</div>
+                  <button onClick={()=>{const newMonth=displayMonth+1;const newYear=newMonth>11?displayYear+1:displayYear;setDatePickerState({...datePickerState,displayYear:newYear,displayMonth:newMonth>11?0:newMonth})}} style={{ background:"none",border:"none",cursor:"pointer",fontSize:14,color:"#334155",fontWeight:600 }}>▶</button>
+                </div>
+                <div style={{ display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4 }}>
+                  {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d=><div key={d} style={{ textAlign:"center",fontSize:10,fontWeight:700,color:"#94a3b8",padding:"4px 0" }}>{d}</div>)}
+                  {days.map((day,i)=>{
+                    const dateStr = day ? `${displayYear}-${String(displayMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}` : null;
+                    const isSelected = dateStr === currentDate;
+                    return (
+                      <button key={i} onClick={()=>{if(dateStr) handleSelectDate(datePickerState.taskId,dateStr,datePickerState.field)}} disabled={!day}
+                        style={{ padding:"6px",borderRadius:6,border:isSelected?"2px solid #3b82f6":"1px solid #e2e8f0",background:isSelected?"#dbeafe":"#f8fafc",color:isSelected?"#1e40af":"#334155",cursor:day?"pointer":"default",fontSize:11,fontWeight:day?500:400,opacity:day?1:0.3,transition:"all .15s" }}>
+                        {day}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          );
+        })()
       )}
 
       {/* MODALS */}
