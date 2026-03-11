@@ -3,6 +3,7 @@ import { Suspense, useState, useRef, useCallback, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import * as XLSX from "xlsx";
 
 /* ─── DATE HELPERS ──────────────────────────────────────────────────── */
 function addDays(dateStr: string, n: number): string {
@@ -542,6 +543,98 @@ function GanttChart() {
     } catch (error) { console.error("Failed to update phases:", error); }
   };
 
+  const exportTableToExcel = () => {
+    const exportData: any[] = [];
+    
+    for (const row of rows) {
+      if (row.type === "phase") {
+        exportData.push({
+          Type: "▌ PHASE",
+          Name: `${row.pm.id} — ${row.pm.label}`,
+          Owner: "",
+          Status: "",
+          "Start Date": fmtDate(row.pm.start),
+          "End Date": fmtDate(row.pm.end),
+        });
+      } else if (row.type === "epic") {
+        exportData.push({
+          Type: "   ◆ Epic",
+          Name: `${row.ename}`,
+          Owner: "",
+          Status: "",
+          "Start Date": "",
+          "End Date": "",
+        });
+      } else if (row.type === "task") {
+        const t = row.t;
+        exportData.push({
+          Type: "      • Task",
+          Name: t.task,
+          Owner: t.owner,
+          Status: t.status || "Planned",
+          "Start Date": fmtDate(t.start),
+          "End Date": fmtDate(t.end),
+        });
+      }
+    }
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    
+    // Style header row
+    const headerStyle = {
+      font: { bold: true, color: { rgb: "FFFFFF" } },
+      fill: { fgColor: { rgb: "2563EB" } },
+      alignment: { horizontal: "center", vertical: "center" },
+    };
+    
+    // Apply header styling (row 1)
+    for (let col = 0; col < 6; col++) {
+      const cellRef = XLSX.utils.encode_cell({ r: 0, c: col });
+      if (!worksheet[cellRef]) continue;
+      worksheet[cellRef].s = headerStyle;
+    }
+    
+    // Apply row styling
+    for (let row = 1; row < exportData.length + 1; row++) {
+      const typeCell = worksheet[XLSX.utils.encode_cell({ r: row, c: 0 })];
+      if (!typeCell) continue;
+      
+      let rowStyle: any = { alignment: { wrapText: true } };
+      
+      if (typeCell.v.includes("PHASE")) {
+        rowStyle.font = { bold: true, size: 12, color: { rgb: "0F172A" } };
+        rowStyle.fill = { fgColor: { rgb: "EFF6FF" } };
+      } else if (typeCell.v.includes("Epic")) {
+        rowStyle.font = { bold: true, size: 11, color: { rgb: "1E40AF" } };
+        rowStyle.fill = { fgColor: { rgb: "F0F9FF" } };
+      } else {
+        rowStyle.font = { size: 10, color: { rgb: "334155" } };
+      }
+      
+      // Apply styling to all cells in the row
+      for (let col = 0; col < 6; col++) {
+        const cellRef = XLSX.utils.encode_cell({ r: row, c: col });
+        if (worksheet[cellRef]) {
+          worksheet[cellRef].s = rowStyle;
+        }
+      }
+    }
+    
+    // Set column widths
+    worksheet["!cols"] = [
+      { wch: 18 },  // Type
+      { wch: 40 },  // Name
+      { wch: 18 },  // Owner
+      { wch: 15 },  // Status
+      { wch: 15 },  // Start Date
+      { wch: 15 },  // End Date
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Tasks");
+    XLSX.writeFile(workbook, `gantt-export-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
   // Status badge colors
   const statusColors: Record<string, {bg:string,color:string,dot:string}> = {
     "Planned":     { bg:"#f1f5f9", color:"#475569", dot:"#94a3b8" },
@@ -613,6 +706,11 @@ function GanttChart() {
             <span style={{display:isMobile?"none":"inline"}}>Edit Dates</span>
           </button>
         )}
+        <button className="toolbar-btn" onClick={exportTableToExcel}
+          style={{ display:"flex",alignItems:"center",gap:5,padding:"6px 14px",borderRadius:8,border:"1.5px solid #e2e8f0",background:"#f8fafc",color:"#374151",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit" }}>
+          <span>📥</span>
+          <span style={{display:isMobile?"none":"inline"}}>Export</span>
+        </button>
 
         {/* ENHANCED VIEW MODE TOGGLE */}
         <ViewModeToggle viewMode={viewMode} setViewMode={setViewMode} />
