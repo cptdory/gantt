@@ -26,5 +26,6 @@ export default defineSchema({
     end: v.string(),
     so: v.number(), // startOffset within phase
     eo: v.number(), // endOffset within phase
+    order: v.optional(v.number()), // Task display order
   }),
 });

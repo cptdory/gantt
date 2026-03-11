@@ -322,6 +322,7 @@ function GanttChart() {
   const updateTaskMutation = useMutation(api.tasks.updateTask);
   const deleteTaskMutation = useMutation(api.tasks.deleteTask);
   const updatePhasesMutation = useMutation(api.phases.updatePhases);
+  const updateTaskOrderMutation = useMutation(api.tasks.updateTaskOrder);
 
   useEffect(() => { setPhases(dbPhases); }, [dbPhases]);
   useEffect(() => { setTaskDefs(dbTasks); }, [dbTasks]);
@@ -332,6 +333,8 @@ function GanttChart() {
   const [modal, setModal] = useState<any>(null);
   const [tooltip, setTooltip] = useState<any>(null);
   const [hoverRow, setHoverRow] = useState(null);
+  const [draggedTask, setDraggedTask] = useState<any>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(typeof window !== "undefined" && window.innerWidth < 768);
   const [viewMode, setViewMode] = useState<"day" | "week" | "month">("month");
@@ -496,10 +499,18 @@ function GanttChart() {
     const epics = [...new Set(pt.map(t => t.epic))];
     for (const ename of epics) {
       const ek = `${pm.id}::${ename}`;
-      const et = pt.filter(t => t.epic === ename);
+      let et = pt.filter(t => t.epic === ename);
+      // Sort tasks by order field, with unordered tasks at the end
+      et = et.sort((a: any, b: any) => {
+        const orderA = a.order !== undefined ? a.order : Infinity;
+        const orderB = b.order !== undefined ? b.order : Infinity;
+        return orderA - orderB;
+      });
       rows.push({ type:"epic", pm, ename, id:ek, tasks:et });
       if (!isEOpen(ek)) continue;
-      for (const t of et) rows.push({ type:"task", pm, t, id:t.id });
+      for (let i = 0; i < et.length; i++) {
+        rows.push({ type:"task", pm, t: et[i], id: et[i].id, taskIndex: i, taskEpic: ename });
+      }
     }
   }
 
@@ -542,6 +553,30 @@ function GanttChart() {
       setPhases(phasesWithOrder);
       setModal(null);
     } catch (error) { console.error("Failed to update phases:", error); }
+  };
+
+  const handleTaskDrop = async (sourceIndex: number, targetIndex: number, epicName: string, phaseId: string) => {
+    if (sourceIndex === targetIndex) return;
+    
+    const pt = tasks.filter(t => t.phaseId === phaseId && t.epic === epicName);
+    let et = pt.sort((a: any, b: any) => {
+      const orderA = a.order !== undefined ? a.order : Infinity;
+      const orderB = b.order !== undefined ? b.order : Infinity;
+      return orderA - orderB;
+    });
+    
+    const newOrder = et.map((t: any) => t.id);
+    const [source] = newOrder.splice(sourceIndex, 1);
+    newOrder.splice(targetIndex, 0, source);
+    
+    const updates = newOrder.map((id: string, idx: number) => ({ id, order: idx }));
+    try {
+      await updateTaskOrderMutation({ updates });
+      setTaskDefs((ts: any) => ts.map((t: any) => {
+        const update = updates.find((u: any) => u.id === t.id);
+        return update ? { ...t, order: update.order } : t;
+      }));
+    } catch (error) { console.error("Failed to update task order:", error); }
   };
 
   const exportTableToExcel = () => {
@@ -885,11 +920,36 @@ function GanttChart() {
                 return (
                   <div key={row.id} className={!isPhase?"rh row-anim":"row-anim"}
                     onClick={()=>isTask&&setSelected(t.id===selected?null:t.id)}
-                    style={{ display:"flex",height:rowH,borderBottom:"1px solid #edf0f7",background:bg,cursor:isTask?"pointer":"default",flexShrink:0,alignItems:"stretch",transition:"background .1s" }}
+                    style={{ display:"flex",height:rowH,borderBottom:"1px solid #edf0f7",background:dragOverIndex===rows.indexOf(row)?"#e0e7ff":bg,flexShrink:0,alignItems:"stretch",transition:"background .1s",opacity:draggedTask?.id===row.id?0.5:1 }}
                     onMouseEnter={()=>setHoverRow(row.id)} onMouseLeave={()=>setHoverRow(null)}>
 
                     {/* Name cell */}
                     <div style={{ width:LIST_W,display:"flex",alignItems:"center",borderRight:"1px solid #edf0f7",padding:`0 8px 0 ${isPhase?10:isEpic?20:34}px`,gap:5,overflow:"hidden" }}>
+                      {isTask && isDev && (
+                        <div draggable
+                          onDragStart={()=>setDraggedTask({...row})}
+                          onDragOver={(e)=>{e.preventDefault();setDragOverIndex(rows.indexOf(row))}}
+                          onDragLeave={()=>setDragOverIndex(null)}
+                          onDrop={(e)=>{
+                            e.preventDefault();
+                            if(!draggedTask) return;
+                            const dragIndex = rows.findIndex(r => r.id === draggedTask.id);
+                            const dropIndex = rows.indexOf(row);
+                            if(dragIndex !== -1 && dropIndex !== -1) {
+                              const sourceTaskIndex = draggedTask.taskIndex;
+                              const targetTaskIndex = row.taskIndex;
+                              handleTaskDrop(sourceTaskIndex, targetTaskIndex, row.taskEpic, row.pm.id);
+                            }
+                            setDraggedTask(null);
+                            setDragOverIndex(null);
+                          }}
+                          onClick={e=>e.stopPropagation()}
+                          style={{ cursor:"grab",padding:"4px 2px",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,userSelect:"none",color:"#94a3b8",transition:"all .15s" }}
+                          onMouseEnter={e=>(e.currentTarget.style.color="#475569")}
+                          onMouseLeave={e=>(e.currentTarget.style.color="#94a3b8")}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="9" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="16" cy="5" r="1"/><circle cx="16" cy="12" r="1"/><circle cx="16" cy="19" r="1"/></svg>
+                        </div>
+                      )}
                       {isPhase && (
                         <button onClick={e=>{e.stopPropagation();setPhaseOpen(s=>({...s,[pm.id]:!isPOpen(pm.id)}))}}
                           style={{ background:"none",border:"none",cursor:"pointer",color:pm.color,fontSize:10,padding:0,width:14,flexShrink:0,transition:"transform .15s",transform:isPOpen(pm.id)?"rotate(0deg)":"rotate(-90deg)" }}>▾</button>

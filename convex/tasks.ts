@@ -33,6 +33,7 @@ export const createTask = mutation({
     end: v.string(),
     so: v.number(),
     eo: v.number(),
+    order: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const taskId = await ctx.db.insert("tasks", {
@@ -48,6 +49,7 @@ export const createTask = mutation({
       end: args.end,
       so: args.so,
       eo: args.eo,
+      order: args.order,
     });
     return taskId;
   },
@@ -67,6 +69,7 @@ export const updateTask = mutation({
     end: v.optional(v.string()),
     so: v.optional(v.number()),
     eo: v.optional(v.number()),
+    order: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const existingTask = await ctx.db
@@ -90,6 +93,7 @@ export const updateTask = mutation({
     if (args.end !== undefined) updates.end = args.end;
     if (args.so !== undefined) updates.so = args.so;
     if (args.eo !== undefined) updates.eo = args.eo;
+    if (args.order !== undefined) updates.order = args.order;
 
     await ctx.db.patch(existingTask._id, updates);
   },
@@ -111,6 +115,7 @@ export const bulkCreateTasks = mutation({
         end: v.string(),
         so: v.number(),
         eo: v.number(),
+        order: v.optional(v.number()),
       })
     ),
   },
@@ -154,6 +159,29 @@ export const deleteTasksByPhase = mutation({
 
     for (const task of tasks) {
       await ctx.db.delete(task._id);
+    }
+  },
+});
+
+export const updateTaskOrder = mutation({
+  args: {
+    updates: v.array(
+      v.object({
+        id: v.string(),
+        order: v.number(),
+      })
+    ),
+  },
+  handler: async (ctx, args) => {
+    for (const { id, order } of args.updates) {
+      const task = await ctx.db
+        .query("tasks")
+        .filter((q) => q.eq(q.field("id"), id))
+        .first();
+
+      if (task) {
+        await ctx.db.patch(task._id, { order });
+      }
     }
   },
 });
