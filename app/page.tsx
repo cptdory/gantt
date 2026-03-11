@@ -31,6 +31,17 @@ function resolveTasks(taskDefs: any[], phases: any[]): any[] {
 const BAR_COLORS = ["#3b82f6","#7c3aed","#0891b2","#d97706","#059669","#dc2626","#db2777","#0d9488"];
 const ROW_H = 28;
 
+/* ─── COLOR HELPERS ─────────────────────────────────────────────────── */
+function lightenColor(hex: string): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const lightR = Math.round(r + (255 - r) * 0.85);
+  const lightG = Math.round(g + (255 - g) * 0.85);
+  const lightB = Math.round(b + (255 - b) * 0.85);
+  return `#${lightR.toString(16).padStart(2, "0")}${lightG.toString(16).padStart(2, "0")}${lightB.toString(16).padStart(2, "0")}`;
+}
+
 /* ─── MODAL ─────────────────────────────────────────────────────────── */
 function Modal({ title, onClose, children, width = 520 }: any) {
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
@@ -66,7 +77,17 @@ function PhaseEditModal({ phases, onSave, onClose, isDev }: any) {
 
   const updatePhase = (idx: number, key: string, val: any) => {
     setLocalPhases((prev: any) => {
-      const next = prev.map((p: any, i: number) => i === idx ? { ...p, [key]: val } : p);
+      const next = prev.map((p: any, i: number) => {
+        if (i === idx) {
+          const updated = { ...p, [key]: val };
+          // When color is updated, automatically update light color
+          if (key === "color") {
+            updated.light = lightenColor(val);
+          }
+          return updated;
+        }
+        return p;
+      });
       for (let i = 1; i < next.length; i++) {
         next[i] = { ...next[i], start: addDays(next[i-1].end, 1) };
         next[i] = { ...next[i], end: addDays(next[i].start, diffDays(next[i].start, next[i].end) < 0 ? 27 : diffDays(next[i-1].end, next[i].end) - 1) };
@@ -416,7 +437,7 @@ function GanttChart() {
   const INFO_W = columnWidths.info;
 
   const baseSize = isMobile ? 4 : 5.4;
-  const PX_PER_UNIT = viewMode === "day" ? baseSize * 1 : viewMode === "week" ? baseSize * 7 : baseSize * 30.5;
+  const PX_PER_UNIT = viewMode === "day" ? baseSize * 20 : viewMode === "week" ? baseSize * 4.5 : baseSize * 30.5;
 
   const totalDays = diffDays(yearStart, yearEnd) + 1;
   const totalUnits = viewMode === "day" ? totalDays : viewMode === "week" ? Math.ceil(totalDays / 7) : Math.ceil(totalDays / 30.5);
@@ -434,7 +455,7 @@ function GanttChart() {
   }
 
   // Build ticks
-  const ticks: {label: string, date: string, isMinor?: boolean}[] = [];
+  const ticks: {label: string, date: string, isMinor?: boolean, month?: string}[] = [];
   if (viewMode === "day") {
     const dayNames = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
     let current = new Date(2026, 0, 1);
@@ -448,7 +469,8 @@ function GanttChart() {
     let current = new Date(2026, 0, 1);
     let weekNum = 1;
     while (current.getFullYear() === 2026) {
-      ticks.push({ label: `W${weekNum}`, date: fmtISO(current) });
+      const monthStr = current.toLocaleDateString("en-US", { month: "short" });
+      ticks.push({ label: `W${weekNum}`, date: fmtISO(current), month: monthStr });
       current = new Date(current.getTime() + 7 * 86400000);
       weekNum++;
     }
@@ -683,15 +705,22 @@ function GanttChart() {
                           </div>
                         );
                       })}
-                      {monthTicks.filter(t=>!t.isMinor).map((tick,i) => {
+                      {monthTicks.map((tick,i) => {
                         const x = toX(tick.date);
                         const isSun = new Date(tick.date).getDay() === 0;
+                        const monthStr = new Date(tick.date).toLocaleDateString("en-US", { month: "short" });
+                        const dayNum = new Date(tick.date).getDate();
                         return (
                           <div key={i} style={{ position:"absolute",top:0,left:x,height:"100%",display:"flex",flexDirection:"column",justifyContent:"flex-end",paddingBottom:3,alignItems:"center" }}>
                             <div style={{ width:isSun?1.5:1,height:isSun?8:5,background:isSun?"#94a3b8":"#e2e8f0",marginBottom:2 }}/>
-                            <span style={{ fontSize:isMobile?7:9,fontWeight:isSun?700:400,color:isSun?"#334155":"#94a3b8",whiteSpace:"nowrap",lineHeight:1 }}>
-                              {isSun ? tick.label : ""}
-                            </span>
+                            <div style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:1 }}>
+                              <span style={{ fontSize:isMobile?5:7,fontWeight:isSun?700:500,color:isSun?"#334155":"#64748b",whiteSpace:"nowrap",lineHeight:1 }}>
+                                {dayNum}
+                              </span>
+                              {isSun && <span style={{ fontSize:isMobile?5:7,fontWeight:500,color:"#94a3b8",whiteSpace:"nowrap",lineHeight:1 }}>
+                                {monthStr}
+                              </span>}
+                            </div>
                           </div>
                         );
                       })}
@@ -700,12 +729,20 @@ function GanttChart() {
                   {viewMode === "week" && monthTicks.map((tick,i) => {
                     const x = toX(tick.date);
                     const isFirst = i===0 || new Date(tick.date).getDate()<=7;
+                    const date = new Date(tick.date);
+                    const weekNum = Math.ceil((date.getDate() + new Date(date.getFullYear(), date.getMonth(), 1).getDay()) / 7);
+                    const monthStr = date.toLocaleDateString("en-US", { month: "short" });
                     return (
                       <div key={i} style={{ position:"absolute",top:0,left:x,height:"100%",display:"flex",flexDirection:"column",justifyContent:"flex-end",paddingBottom:3 }}>
                         <div style={{ width:1,height:isFirst?8:5,background:isFirst?"#94a3b8":"#e2e8f0",marginBottom:2 }}/>
-                        <span style={{ fontSize:isMobile?7:10,fontWeight:isFirst?700:500,color:isFirst?"#334155":"#94a3b8",whiteSpace:"nowrap",transform:"translateX(-50%)",lineHeight:1 }}>
-                          {tick.label}
-                        </span>
+                        <div style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:1 }}>
+                          <span style={{ fontSize:isMobile?6:9,fontWeight:600,color:"#475569",whiteSpace:"nowrap",transform:"translateX(-50%)",lineHeight:1 }}>
+                            W{weekNum}
+                          </span>
+                          <span style={{ fontSize:isMobile?5:7,fontWeight:500,color:"#94a3b8",whiteSpace:"nowrap",transform:"translateX(-50%)",lineHeight:1 }}>
+                            {monthStr}
+                          </span>
+                        </div>
                       </div>
                     );
                   })}
@@ -741,10 +778,11 @@ function GanttChart() {
                 if(isSel) bg="#eff6ff";
                 const statusStyle = isTask ? (statusColors[t.status] || statusColors["Planned"]) : null;
 
+                const rowH = isMobile ? 24 : viewMode === "day" ? 36 : viewMode === "week" ? 32 : ROW_H;
                 return (
                   <div key={row.id} className={!isPhase?"rh row-anim":"row-anim"}
                     onClick={()=>isTask&&setSelected(t.id===selected?null:t.id)}
-                    style={{ display:"flex",height:isMobile?24:ROW_H,borderBottom:"1px solid #edf0f7",background:bg,cursor:isTask?"pointer":"default",flexShrink:0,alignItems:"stretch",transition:"background .1s" }}
+                    style={{ display:"flex",height:rowH,borderBottom:"1px solid #edf0f7",background:bg,cursor:isTask?"pointer":"default",flexShrink:0,alignItems:"stretch",transition:"background .1s" }}
                     onMouseEnter={()=>setHoverRow(row.id)} onMouseLeave={()=>setHoverRow(null)}>
 
                     {/* Name cell */}
@@ -838,14 +876,22 @@ function GanttChart() {
                   if(isSel) bg="#eff6ff";
 
                   const phaseX=isPhase?toX(pm.start):0, phaseW=isPhase?toW(pm.start,pm.end):0;
-                  const epicX=isEpic?Math.min(...(row.tasks?.map((t: any)=>toX(t.start))??[])):0;
-                  const epicW=isEpic?(Math.max(...(row.tasks?.map((t: any)=>toX(t.end)+PX_PER_UNIT)??[0]))-epicX):0;
+                  let epicX=0, epicW=0;
+                  if(isEpic) {
+                    const epicStartX=Math.min(...(row.tasks?.map((t: any)=>toX(t.start))??[]));
+                    const epicEndX=Math.max(...(row.tasks?.map((t: any)=>toX(t.end)+PX_PER_UNIT)??[0]));
+                    const phaseStartX=toX(pm.start);
+                    const phaseEndX=toX(pm.end)+toW(pm.end,pm.end);
+                    epicX=Math.max(epicStartX,phaseStartX);
+                    epicW=Math.max(0,Math.min(epicEndX,phaseEndX)-epicX);
+                  }
                   const taskX=isTask?toX(t.start):0, taskW=isTask?Math.max(toW(t.start,t.end),isMobile?4:8):0;
 
+                  const rowH = isMobile ? 24 : viewMode === "day" ? 36 : viewMode === "week" ? 32 : ROW_H;
                   return (
                     <div key={row.id} className={!isPhase?"rh":""}
                       onClick={()=>isTask&&setSelected(t.id===selected?null:t.id)}
-                      style={{ height:isMobile?24:ROW_H,borderBottom:"1px solid #edf0f7",background:bg,position:"relative",cursor:isTask?"pointer":"default",flexShrink:0,transition:"background .1s" }}
+                      style={{ height:rowH,borderBottom:"1px solid #edf0f7",background:bg,position:"relative",cursor:isTask?"pointer":"default",flexShrink:0,transition:"background .1s" }}
                       onMouseEnter={()=>setHoverRow(row.id)}
                       onMouseLeave={()=>{setHoverRow(null);setTooltip(null);}}>
 
@@ -864,14 +910,14 @@ function GanttChart() {
 
                       {/* Phase band */}
                       {isPhase && <>
-                        <div style={{ position:"absolute",top:isMobile?5:9,height:isMobile?8:12,borderRadius:3,background:pm.color,opacity:.15,left:phaseX,width:phaseW,zIndex:1 }}/>
-                        <div style={{ position:"absolute",top:isMobile?5:9,height:isMobile?8:12,borderRadius:3,border:`1.5px solid ${pm.color}`,opacity:.4,left:phaseX,width:phaseW,zIndex:1 }}/>
-                        <div style={{ position:"absolute",top:isMobile?5:9,height:isMobile?8:12,borderRadius:3,background:`linear-gradient(90deg,${pm.color}30,transparent)`,left:phaseX,width:Math.min(60,phaseW),zIndex:1 }}/>
+                        <div style={{ position:"absolute",top:isMobile?5:viewMode==="day"?6:viewMode==="week"?7:9,height:isMobile?8:viewMode==="day"?14:viewMode==="week"?12:12,borderRadius:3,background:pm.color,opacity:.15,left:phaseX,width:phaseW,zIndex:1 }}/>
+                        <div style={{ position:"absolute",top:isMobile?5:viewMode==="day"?6:viewMode==="week"?7:9,height:isMobile?8:viewMode==="day"?14:viewMode==="week"?12:12,borderRadius:3,border:`1.5px solid ${pm.color}`,opacity:.4,left:phaseX,width:phaseW,zIndex:1 }}/>
+                        <div style={{ position:"absolute",top:isMobile?5:viewMode==="day"?6:viewMode==="week"?7:9,height:isMobile?8:viewMode==="day"?14:viewMode==="week"?12:12,borderRadius:3,background:`linear-gradient(90deg,${pm.color}30,transparent)`,left:phaseX,width:Math.min(60,phaseW),zIndex:1 }}/>
                       </>}
 
                       {/* Epic band */}
                       {isEpic && (
-                        <div style={{ position:"absolute",top:isMobile?6:10,height:isMobile?5:9,borderRadius:2,background:pm.color,opacity:.1,left:epicX,width:Math.max(epicW,4),zIndex:1,borderTop:`2px solid ${pm.color}30` }}/>
+                        <div style={{ position:"absolute",top:isMobile?6:viewMode==="day"?7:viewMode==="week"?8:10,height:isMobile?5:viewMode==="day"?11:viewMode==="week"?10:9,borderRadius:2,background:pm.color,opacity:.1,left:epicX,width:Math.max(epicW,4),zIndex:1,borderTop:`2px solid ${pm.color}30` }}/>
                       )}
 
                       {/* Task bar */}
@@ -880,12 +926,14 @@ function GanttChart() {
                           onClick={e=>{e.stopPropagation();setSelected(t.id===selected?null:t.id)}}
                           onMouseMove={(e: any)=>setTooltip({x:e.clientX+14,y:e.clientY-12,task:t.task,owner:t.owner,start:t.start,end:t.end,status:t.status,color:t.color||pm.color})}
                           style={{
-                            top:isMobile?4:5,height:isMobile?13:18,left:taskX,width:taskW,
+                            top:isMobile?4:viewMode==="day"?3:viewMode==="week"?4:5,
+                            height:isMobile?13:viewMode==="day"?22:viewMode==="week"?20:18,
+                            left:taskX,width:taskW,
                             background:`linear-gradient(135deg,${t.color||pm.color},${t.color||pm.color}dd)`,
                             zIndex:2,
                             boxShadow:isSel?`0 0 0 2px #fff,0 0 0 3.5px ${t.color||pm.color},0 4px 12px ${t.color||pm.color}50`:isHov?`0 3px 10px ${t.color||pm.color}55`:`0 1px 4px ${t.color||pm.color}30`
                           }}>
-                          <span style={{ color:"rgba(255,255,255,0.92)",fontSize:isMobile?7:9,fontWeight:600,textShadow:"0 1px 3px rgba(0,0,0,.25)",overflow:"hidden",textOverflow:"ellipsis",letterSpacing:".01em" }}>
+                          <span style={{ color:"rgba(255,255,255,0.92)",fontSize:isMobile?7:viewMode==="day"?10:viewMode==="week"?9:9,fontWeight:600,textShadow:"0 1px 3px rgba(0,0,0,.25)",overflow:"hidden",textOverflow:"ellipsis",letterSpacing:".01em" }}>
                             {isMobile ? t.owner.split("+")[0].trim().slice(0,3) : t.owner}
                           </span>
                         </div>
