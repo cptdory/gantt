@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef, useCallback, useEffect } from "react";
+import { Suspense, useState, useRef, useCallback, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -285,7 +285,7 @@ function ViewModeToggle({ viewMode, setViewMode }: { viewMode: "day"|"week"|"mon
 }
 
 /* ─── MAIN ──────────────────────────────────────────────────────────── */
-export default function GanttChart() {
+function GanttChart() {
   const searchParams = useSearchParams();
   const isDev = searchParams.has("dev");
 
@@ -971,5 +971,18 @@ export default function GanttChart() {
         </Modal>
       )}
     </div>
+  );
+}
+
+export default function Page() {
+  return (
+    <Suspense fallback={
+      <div style={{ fontFamily:"'DM Sans',sans-serif",display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:"#f0f4fa",color:"#64748b",gap:12,flexDirection:"column" }}>
+        <div style={{ width:36,height:36,border:"3px solid #2563eb",borderTopColor:"transparent",borderRadius:"50%",animation:"spin 0.8s linear infinite" }}/>
+        <span style={{ fontSize:13,fontWeight:500 }}>Loading project…</span>
+      </div>
+    }>
+      <GanttChart />
+    </Suspense>
   );
 }
