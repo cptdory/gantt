@@ -1,5 +1,6 @@
 "use client";
 import { useState, useRef, useCallback, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 
@@ -60,7 +61,7 @@ function Field({ label, children }: any) {
 }
 
 /* ─── PHASE EDIT MODAL ──────────────────────────────────────────────── */
-function PhaseEditModal({ phases, onSave, onClose }: any) {
+function PhaseEditModal({ phases, onSave, onClose, isDev }: any) {
   const [localPhases, setLocalPhases] = useState(phases.map((p: any) => ({ ...p })));
 
   const updatePhase = (idx: number, key: string, val: any) => {
@@ -140,13 +141,13 @@ function PhaseEditModal({ phases, onSave, onClose }: any) {
                 <span style={{ fontSize:11,fontWeight:700,color:"#475569",background:"rgba(255,255,255,0.8)",padding:"3px 10px",borderRadius:20,border:"1px solid #e2e8f0",whiteSpace:"nowrap" }}>
                   {dur}d
                 </span>
-                {localPhases.length > 1 && (
+                {isDev && localPhases.length > 1 && (
                   <button onClick={()=>deletePhase(idx)} style={{ background:"#fff0f0",border:"1px solid #fecaca",color:"#dc2626",borderRadius:7,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",flexShrink:0 }}>
                     Remove
                   </button>
                 )}
               </div>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 12px" }}>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 12px", marginBottom:12 }}>
                 <Field label="Start Date">
                   <input type="date" value={p.start} onChange={e => setStart(idx, e.target.value)} style={{ ...iS, borderColor: `${p.color}60` }}/>
                 </Field>
@@ -154,29 +155,41 @@ function PhaseEditModal({ phases, onSave, onClose }: any) {
                   <input type="date" value={p.end} min={addDays(p.start, 6)} onChange={e => setEnd(idx, e.target.value)} style={{ ...iS, borderColor: `${p.color}60` }}/>
                 </Field>
               </div>
+              <Field label="Phase Color">
+                <div style={{ display:"flex",gap:6,flexWrap:"wrap",paddingTop:4 }}>
+                  {BAR_COLORS.map(c=>(
+                    <div key={c} onClick={()=>updatePhase(idx,"color",c)}
+                      style={{ width:24,height:24,borderRadius:6,background:c,cursor:"pointer",border:p.color===c?"3px solid #0f172a":"2px solid transparent",boxSizing:"border-box",transition:"transform .12s,border-color .12s",transform:p.color===c?"scale(1.15)":"scale(1)" } as React.CSSProperties}/>
+                  ))}
+                </div>
+              </Field>
             </div>
           );
         })}
       </div>
-      <button onClick={addPhase} style={{ padding:"9px 16px",borderRadius:8,border:"1.5px dashed #2563eb",background:"transparent",color:"#2563eb",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",marginBottom:14,width:"100%",transition:"background .15s" }}
-        onMouseEnter={e=>(e.currentTarget.style.background="#eff6ff")}
-        onMouseLeave={e=>(e.currentTarget.style.background="transparent")}>
-        + Add Phase
-      </button>
+      {isDev && (
+        <button onClick={addPhase} style={{ padding:"9px 16px",borderRadius:8,border:"1.5px dashed #2563eb",background:"transparent",color:"#2563eb",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",marginBottom:14,width:"100%",transition:"background .15s" }}
+          onMouseEnter={e=>(e.currentTarget.style.background="#eff6ff")}
+          onMouseLeave={e=>(e.currentTarget.style.background="transparent")}>
+          + Add Phase
+        </button>
+      )}
       <div style={{ padding:"9px 14px", background:"#f8fafc", borderRadius:8, fontSize:11, color:"#475569",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
         <span>Project span: <strong style={{color:"#0f172a"}}>{fmtDate(localPhases[0].start)}</strong> → <strong style={{color:"#0f172a"}}>{fmtDate(localPhases[localPhases.length-1].end)}</strong></span>
         <span style={{fontWeight:700,color:"#2563eb"}}>{diffDays(localPhases[0].start, localPhases[localPhases.length-1].end) + 1} days total</span>
       </div>
       <div style={{ display:"flex",gap:8,justifyContent:"flex-end",marginTop:16 }}>
         <button onClick={onClose} style={{ padding:"8px 18px",borderRadius:8,border:"1.5px solid #e2e8f0",background:"#f8fafc",fontSize:12,cursor:"pointer",color:"#374151",fontFamily:"inherit",fontWeight:600 }}>Cancel</button>
-        <button onClick={() => onSave(localPhases)} style={{ padding:"8px 24px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#2563eb,#1d4ed8)",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 14px rgba(37,99,235,0.35)" }}>Apply Changes</button>
+        {isDev && (
+          <button onClick={() => onSave(localPhases)} style={{ padding:"8px 24px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#2563eb,#1d4ed8)",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 14px rgba(37,99,235,0.35)" }}>Apply Changes</button>
+        )}
       </div>
     </Modal>
   );
 }
 
 /* ─── TASK FORM ─────────────────────────────────────────────────────── */
-function TaskForm({ initial, onSave, onClose, allEpics, phases }: any) {
+function TaskForm({ initial, onSave, onClose, allEpics, phases, isDev }: any) {
   const blank = { phaseId:"P1", epic:"", task:"", owner:"", status:"Planned", start: phases[0].start, end: phases[0].end, color:"#3b82f6" };
   const [f, setF] = useState(initial ? { ...initial } : blank);
   const set = (k: string) => (e: any) => setF((p: any) => ({ ...p, [k]: e.target.value }));
@@ -222,7 +235,9 @@ function TaskForm({ initial, onSave, onClose, allEpics, phases }: any) {
       </div>
       <div style={{ display:"flex",gap:8,justifyContent:"flex-end" }}>
         <button onClick={onClose} style={{ padding:"8px 18px",borderRadius:8,border:"1.5px solid #e2e8f0",background:"#f8fafc",fontSize:12,cursor:"pointer",color:"#374151",fontFamily:"inherit",fontWeight:600 }}>Cancel</button>
-        <button onClick={()=>valid&&onSave(f)} style={{ padding:"8px 22px",borderRadius:8,border:"none",background:valid?"linear-gradient(135deg,#2563eb,#1d4ed8)":"#bfdbfe",color:"#fff",fontSize:12,fontWeight:700,cursor:valid?"pointer":"not-allowed",fontFamily:"inherit",boxShadow:valid?"0 4px 14px rgba(37,99,235,0.35)":"none",transition:"all .15s" }}>Save Task</button>
+        {isDev && (
+          <button onClick={()=>valid&&onSave(f)} style={{ padding:"8px 22px",borderRadius:8,border:"none",background:valid?"linear-gradient(135deg,#2563eb,#1d4ed8)":"#bfdbfe",color:"#fff",fontSize:12,fontWeight:700,cursor:valid?"pointer":"not-allowed",fontFamily:"inherit",boxShadow:valid?"0 4px 14px rgba(37,99,235,0.35)":"none",transition:"all .15s" }}>Save Task</button>
+        )}
       </div>
     </div>
   );
@@ -271,6 +286,9 @@ function ViewModeToggle({ viewMode, setViewMode }: { viewMode: "day"|"week"|"mon
 
 /* ─── MAIN ──────────────────────────────────────────────────────────── */
 export default function GanttChart() {
+  const searchParams = useSearchParams();
+  const isDev = searchParams.has("dev");
+
   const dbPhases = useQuery(api.phases.getPhases) || [];
   const dbTasks = useQuery(api.tasks.getTasks) || [];
 
@@ -559,16 +577,20 @@ export default function GanttChart() {
 
       {/* TOOLBAR */}
       <div style={{ background:"#fff",borderBottom:"1px solid #e4e9f2",height:"auto",minHeight:46,display:"flex",alignItems:"center",padding:"0 12px",gap:8,flexShrink:0,flexWrap:"wrap" }}>
-        <button onClick={()=>setModal({mode:"add"})} className="toolbar-btn"
-          style={{ display:"flex",alignItems:"center",gap:5,padding:"6px 14px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#2563eb,#1d4ed8)",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(37,99,235,0.3)",letterSpacing:"-0.1px" }}>
-          <span style={{ fontSize:15,lineHeight:1,marginTop:-1 }}>+</span>
-          <span style={{display:isMobile?"none":"inline"}}>Add Task</span>
-        </button>
-        <button className="toolbar-btn" onClick={()=>setModal({mode:"editPhases"})}
-          style={{ display:"flex",alignItems:"center",gap:5,padding:"6px 14px",borderRadius:8,border:"1.5px solid #e2e8f0",background:"#f8fafc",color:"#374151",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit" }}>
-          <span>📅</span>
-          <span style={{display:isMobile?"none":"inline"}}>Edit Dates</span>
-        </button>
+        {isDev && (
+          <button onClick={()=>setModal({mode:"add"})} className="toolbar-btn"
+            style={{ display:"flex",alignItems:"center",gap:5,padding:"6px 14px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#2563eb,#1d4ed8)",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(37,99,235,0.3)",letterSpacing:"-0.1px" }}>
+            <span style={{ fontSize:15,lineHeight:1,marginTop:-1 }}>+</span>
+            <span style={{display:isMobile?"none":"inline"}}>Add Task</span>
+          </button>
+        )}
+        {isDev && (
+          <button className="toolbar-btn" onClick={()=>setModal({mode:"editPhases"})}
+            style={{ display:"flex",alignItems:"center",gap:5,padding:"6px 14px",borderRadius:8,border:"1.5px solid #e2e8f0",background:"#f8fafc",color:"#374151",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit" }}>
+            <span>📅</span>
+            <span style={{display:isMobile?"none":"inline"}}>Edit Dates</span>
+          </button>
+        )}
 
         {/* ENHANCED VIEW MODE TOGGLE */}
         <ViewModeToggle viewMode={viewMode} setViewMode={setViewMode} />
@@ -579,7 +601,7 @@ export default function GanttChart() {
             {sidebarOpen ? "✕" : "📋"}
           </button>
         )}
-        {!isMobile && selTask && (
+        {!isMobile && isDev && selTask && (
           <>
             <div style={{ width:1,height:20,background:"#e2e8f0",margin:"0 2px" }}/>
             <button onClick={()=>setModal({mode:"edit",task:selTask})} className="toolbar-btn"
@@ -742,12 +764,16 @@ export default function GanttChart() {
                       </span>
                       {isTask && (
                         <div className="acts" style={{ display:"flex",gap:1,flexShrink:0,opacity:hoverRow===row.id?1:0,transition:"opacity .15s" }}>
-                          <button className="ib" onClick={e=>{e.stopPropagation();setModal({mode:"edit",task:t})}}>
-                            <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M11.5 2.5l2 2-9 9H2.5v-2l9-9z" stroke="#2563eb" strokeWidth="1.6" strokeLinejoin="round"/></svg>
-                          </button>
-                          <button className="ib" onClick={e=>{e.stopPropagation();setModal({mode:"delete",task:t})}}>
-                            <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M3 4h10M6 4V3h4v1M5 4l.5 9h5l.5-9" stroke="#dc2626" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                          </button>
+                          {isDev && (
+                            <button className="ib" onClick={e=>{e.stopPropagation();setModal({mode:"edit",task:t})}}>
+                              <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M11.5 2.5l2 2-9 9H2.5v-2l9-9z" stroke="#2563eb" strokeWidth="1.6" strokeLinejoin="round"/></svg>
+                            </button>
+                          )}
+                          {isDev && (
+                            <button className="ib" onClick={e=>{e.stopPropagation();setModal({mode:"delete",task:t})}}>
+                              <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M3 4h10M6 4V3h4v1M5 4l.5 9h5l.5-9" stroke="#dc2626" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -923,13 +949,13 @@ export default function GanttChart() {
       )}
 
       {/* MODALS */}
-      {modal?.mode==="editPhases" && <PhaseEditModal phases={phases} onSave={applyPhaseChanges} onClose={()=>setModal(null)}/>}
+      {modal?.mode==="editPhases" && <PhaseEditModal phases={phases} onSave={applyPhaseChanges} onClose={()=>setModal(null)} isDev={isDev}/>}
       {modal && (modal.mode==="add"||modal.mode==="edit") && (
         <Modal title={modal.mode==="add"?"Add New Task":"Edit Task"} onClose={()=>setModal(null)}>
-          <TaskForm initial={modal.mode==="edit"?modal.task:null} onSave={saveTask} onClose={()=>setModal(null)} allEpics={allEpics} phases={phases}/>
+          <TaskForm initial={modal.mode==="edit"?modal.task:null} onSave={saveTask} onClose={()=>setModal(null)} allEpics={allEpics} phases={phases} isDev={isDev}/>
         </Modal>
       )}
-      {modal?.mode==="delete" && (
+      {modal?.mode==="delete" && isDev && (
         <Modal title="Delete Task" onClose={()=>setModal(null)} width={400}>
           <div style={{ padding:"12px 14px",borderRadius:8,background:"#fef2f2",border:"1px solid #fecaca",marginBottom:16,display:"flex",gap:10,alignItems:"flex-start" }}>
             <span style={{ fontSize:18,flexShrink:0 }}>⚠️</span>
