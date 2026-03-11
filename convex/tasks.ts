@@ -25,6 +25,7 @@ export const createTask = mutation({
     phaseId: v.string(),
     epic: v.string(),
     task: v.string(),
+    description: v.optional(v.string()),
     owner: v.string(),
     color: v.string(),
     status: v.string(),
@@ -39,6 +40,7 @@ export const createTask = mutation({
       phaseId: args.phaseId,
       epic: args.epic,
       task: args.task,
+      description: args.description,
       owner: args.owner,
       color: args.color,
       status: args.status,
@@ -57,6 +59,7 @@ export const updateTask = mutation({
     phaseId: v.optional(v.string()),
     epic: v.optional(v.string()),
     task: v.optional(v.string()),
+    description: v.optional(v.string()),
     owner: v.optional(v.string()),
     color: v.optional(v.string()),
     status: v.optional(v.string()),
@@ -79,6 +82,7 @@ export const updateTask = mutation({
     if (args.phaseId !== undefined) updates.phaseId = args.phaseId;
     if (args.epic !== undefined) updates.epic = args.epic;
     if (args.task !== undefined) updates.task = args.task;
+    if (args.description !== undefined) updates.description = args.description;
     if (args.owner !== undefined) updates.owner = args.owner;
     if (args.color !== undefined) updates.color = args.color;
     if (args.status !== undefined) updates.status = args.status;
@@ -99,6 +103,7 @@ export const bulkCreateTasks = mutation({
         phaseId: v.string(),
         epic: v.string(),
         task: v.string(),
+        description: v.optional(v.string()),
         owner: v.string(),
         color: v.string(),
         status: v.string(),

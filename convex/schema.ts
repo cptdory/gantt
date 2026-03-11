@@ -18,6 +18,7 @@ export default defineSchema({
     phaseId: v.string(),
     epic: v.string(),
     task: v.string(),
+    description: v.optional(v.string()), // Task description
     owner: v.string(),
     color: v.string(),
     status: v.string(),

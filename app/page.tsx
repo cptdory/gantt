@@ -212,7 +212,7 @@ function PhaseEditModal({ phases, onSave, onClose, isDev }: any) {
 
 /* ─── TASK FORM ─────────────────────────────────────────────────────── */
 function TaskForm({ initial, onSave, onClose, allEpics, phases, isDev }: any) {
-  const blank = { phaseId:"P1", epic:"", task:"", owner:"", status:"Planned", start: phases[0].start, end: phases[0].end, color:"#3b82f6" };
+  const blank = { phaseId:"P1", epic:"", task:"", description:"", owner:"", status:"Planned", start: phases[0].start, end: phases[0].end, color:"#3b82f6" };
   const [f, setF] = useState(initial ? { ...initial } : blank);
   const set = (k: string) => (e: any) => setF((p: any) => ({ ...p, [k]: e.target.value }));
   const ph = phases.find((p: any) => p.id === f.phaseId) || phases[0];
@@ -240,6 +240,7 @@ function TaskForm({ initial, onSave, onClose, allEpics, phases, isDev }: any) {
       </div>
       <Field label="Epic / Workstream"><input list="ep-opts" value={f.epic} onChange={set("epic")} placeholder="Type or pick…" style={iS}/><datalist id="ep-opts">{epics.map((e: string)=><option key={e} value={e}/>)}</datalist></Field>
       <Field label="Task"><textarea value={f.task} onChange={set("task")} rows={2} style={{ ...iS,resize:"vertical",lineHeight:1.6 }}/></Field>
+      <Field label="Description (optional)"><textarea value={f.description} onChange={set("description")} rows={2} placeholder="Add any additional details…" style={{ ...iS,resize:"vertical",lineHeight:1.6 }}/></Field>
       <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 14px" }}>
         <Field label="Owner"><input value={f.owner} onChange={set("owner")} placeholder="e.g. Partner + Client" style={iS}/></Field>
         <Field label="Status">
@@ -514,10 +515,10 @@ function GanttChart() {
     try {
       if (modal?.mode === "add") {
         const newId = uid();
-        await createTaskMutation({ id:newId, phaseId:form.phaseId, epic:form.epic, task:form.task, owner:form.owner, color:form.color, status:form.status, start:form.start, end:form.end, so, eo });
+        await createTaskMutation({ id:newId, phaseId:form.phaseId, epic:form.epic, task:form.task, description:form.description, owner:form.owner, color:form.color, status:form.status, start:form.start, end:form.end, so, eo });
         setTaskDefs((ts: any) => [...ts, { ...form, id:newId, so, eo }]);
       } else if (modal?.mode === "edit") {
-        await updateTaskMutation({ id:modal.task.id, phaseId:form.phaseId, epic:form.epic, task:form.task, owner:form.owner, color:form.color, status:form.status, start:form.start, end:form.end, so, eo });
+        await updateTaskMutation({ id:modal.task.id, phaseId:form.phaseId, epic:form.epic, task:form.task, description:form.description, owner:form.owner, color:form.color, status:form.status, start:form.start, end:form.end, so, eo });
         setTaskDefs((ts: any) => ts.map((t: any) => t.id === modal.task.id ? { ...t, ...form, so, eo } : t));
       }
       setModal(null);
@@ -551,6 +552,7 @@ function GanttChart() {
         exportData.push({
           Type: "▌ PHASE",
           Name: `${row.pm.id} — ${row.pm.label}`,
+          Description: "",
           Owner: "",
           Status: "",
           "Start Date": fmtDate(row.pm.start),
@@ -560,6 +562,7 @@ function GanttChart() {
         exportData.push({
           Type: "   ◆ Epic",
           Name: `${row.ename}`,
+          Description: "",
           Owner: "",
           Status: "",
           "Start Date": "",
@@ -570,6 +573,7 @@ function GanttChart() {
         exportData.push({
           Type: "      • Task",
           Name: t.task,
+          Description: t.description || "",
           Owner: t.owner,
           Status: t.status || "Planned",
           "Start Date": fmtDate(t.start),
@@ -588,7 +592,7 @@ function GanttChart() {
     };
     
     // Apply header styling (row 1)
-    for (let col = 0; col < 6; col++) {
+    for (let col = 0; col < 7; col++) {
       const cellRef = XLSX.utils.encode_cell({ r: 0, c: col });
       if (!worksheet[cellRef]) continue;
       worksheet[cellRef].s = headerStyle;
@@ -612,7 +616,7 @@ function GanttChart() {
       }
       
       // Apply styling to all cells in the row
-      for (let col = 0; col < 6; col++) {
+      for (let col = 0; col < 7; col++) {
         const cellRef = XLSX.utils.encode_cell({ r: row, c: col });
         if (worksheet[cellRef]) {
           worksheet[cellRef].s = rowStyle;
@@ -623,7 +627,8 @@ function GanttChart() {
     // Set column widths
     worksheet["!cols"] = [
       { wch: 18 },  // Type
-      { wch: 40 },  // Name
+      { wch: 35 },  // Name
+      { wch: 35 },  // Description
       { wch: 18 },  // Owner
       { wch: 15 },  // Status
       { wch: 15 },  // Start Date
@@ -1022,7 +1027,7 @@ function GanttChart() {
                       {isTask && (
                         <div className="gbar"
                           onClick={e=>{e.stopPropagation();setSelected(t.id===selected?null:t.id)}}
-                          onMouseMove={(e: any)=>setTooltip({x:e.clientX+14,y:e.clientY-12,task:t.task,owner:t.owner,start:t.start,end:t.end,status:t.status,color:t.color||pm.color})}
+                          onMouseMove={(e: any)=>setTooltip({x:e.clientX+14,y:e.clientY-12,task:t.task,description:t.description,owner:t.owner,start:t.start,end:t.end,status:t.status,color:t.color||pm.color})}
                           style={{
                             top:isMobile?4:viewMode==="day"?3:viewMode==="week"?4:5,
                             height:isMobile?13:viewMode==="day"?22:viewMode==="week"?20:18,
@@ -1080,6 +1085,9 @@ function GanttChart() {
       {tooltip && (
         <div style={{ position:"fixed",zIndex:3000,top:tooltip?.y,left:tooltip?.x,background:"#1a2744",color:"#f1f5f9",borderRadius:10,padding:"10px 14px",fontSize:11,maxWidth:280,boxShadow:"0 12px 36px rgba(0,0,0,.35)",pointerEvents:"none",border:"1px solid rgba(255,255,255,.1)",backdropFilter:"blur(4px)" }}>
           <div style={{ fontWeight:700,marginBottom:5,lineHeight:1.4,fontSize:12 }}>{tooltip?.task}</div>
+          {tooltip?.description && (
+            <div style={{ fontSize:10,color:"#cbd5e1",marginBottom:6,paddingBottom:6,borderBottom:"1px solid rgba(255,255,255,0.1)",lineHeight:1.4 }}>{tooltip.description}</div>
+          )}
           <div style={{ color:"#94a3b8",fontSize:10,display:"flex",flexDirection:"column",gap:3 }}>
             <span>👤 {tooltip?.owner}</span>
             <span>📅 {fmtDate(tooltip?.start)} → {fmtDate(tooltip?.end)}</span>

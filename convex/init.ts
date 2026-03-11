@@ -21,6 +21,7 @@ export const initializeData = mutation({
         phaseId: v.string(),
         epic: v.string(),
         task: v.string(),
+        description: v.optional(v.string()),
         owner: v.string(),
         color: v.string(),
         status: v.string(),
