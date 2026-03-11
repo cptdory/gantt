@@ -438,7 +438,7 @@ function GanttChart() {
   const INFO_W = columnWidths.info;
 
   const baseSize = isMobile ? 4 : 5.4;
-  const PX_PER_UNIT = viewMode === "day" ? baseSize * 20 : viewMode === "week" ? baseSize * 4.5 : baseSize * 30.5;
+  const PX_PER_UNIT = viewMode === "day" ? baseSize * 5 : viewMode === "week" ? baseSize * 4.5 : baseSize * 30.5;
 
   const totalDays = diffDays(yearStart, yearEnd) + 1;
   const totalUnits = viewMode === "day" ? totalDays : viewMode === "week" ? Math.ceil(totalDays / 7) : Math.ceil(totalDays / 30.5);
