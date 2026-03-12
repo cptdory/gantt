@@ -599,7 +599,6 @@ function GanttChart() {
         exportData.push({
           Type: "▌ PHASE",
           Name: `${row.pm.id} — ${row.pm.label}`,
-          Description: "",
           Owner: "",
           Status: "",
           "Start Date": fmtDate(row.pm.start),
@@ -610,7 +609,6 @@ function GanttChart() {
         exportData.push({
           Type: "   ◆ Epic",
           Name: `${row.ename}`,
-          Description: "",
           Owner: "",
           Status: "",
           "Start Date": "",
@@ -622,7 +620,6 @@ function GanttChart() {
         exportData.push({
           Type: "      • Task",
           Name: t.task,
-          Description: t.description || "",
           Owner: t.owner,
           Status: t.status || "Planned",
           "Start Date": fmtDate(t.start),
@@ -642,7 +639,7 @@ function GanttChart() {
     };
     
     // Apply header styling (row 1)
-    for (let col = 0; col < 8; col++) {
+    for (let col = 0; col < 7; col++) {
       const cellRef = XLSX.utils.encode_cell({ r: 0, c: col });
       if (!worksheet[cellRef]) continue;
       worksheet[cellRef].s = headerStyle;
@@ -666,7 +663,7 @@ function GanttChart() {
       }
       
       // Apply styling to all cells in the row
-      for (let col = 0; col < 8; col++) {
+      for (let col = 0; col < 7; col++) {
         const cellRef = XLSX.utils.encode_cell({ r: row, c: col });
         if (worksheet[cellRef]) {
           worksheet[cellRef].s = rowStyle;
@@ -678,7 +675,6 @@ function GanttChart() {
     worksheet["!cols"] = [
       { wch: 18 },  // Type
       { wch: 35 },  // Name
-      { wch: 35 },  // Description
       { wch: 18 },  // Owner
       { wch: 15 },  // Status
       { wch: 15 },  // Start Date
