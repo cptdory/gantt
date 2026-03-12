@@ -604,6 +604,7 @@ function GanttChart() {
           Status: "",
           "Start Date": fmtDate(row.pm.start),
           "End Date": fmtDate(row.pm.end),
+          Days: diffWeekdays(row.pm.start, row.pm.end),
         });
       } else if (row.type === "epic") {
         exportData.push({
@@ -614,6 +615,7 @@ function GanttChart() {
           Status: "",
           "Start Date": "",
           "End Date": "",
+          Days: "",
         });
       } else if (row.type === "task") {
         const t = row.t;
@@ -625,6 +627,7 @@ function GanttChart() {
           Status: t.status || "Planned",
           "Start Date": fmtDate(t.start),
           "End Date": fmtDate(t.end),
+          Days: diffWeekdays(t.start, t.end),
         });
       }
     }
@@ -639,7 +642,7 @@ function GanttChart() {
     };
     
     // Apply header styling (row 1)
-    for (let col = 0; col < 7; col++) {
+    for (let col = 0; col < 8; col++) {
       const cellRef = XLSX.utils.encode_cell({ r: 0, c: col });
       if (!worksheet[cellRef]) continue;
       worksheet[cellRef].s = headerStyle;
@@ -663,7 +666,7 @@ function GanttChart() {
       }
       
       // Apply styling to all cells in the row
-      for (let col = 0; col < 7; col++) {
+      for (let col = 0; col < 8; col++) {
         const cellRef = XLSX.utils.encode_cell({ r: row, c: col });
         if (worksheet[cellRef]) {
           worksheet[cellRef].s = rowStyle;
@@ -680,6 +683,7 @@ function GanttChart() {
       { wch: 15 },  // Status
       { wch: 15 },  // Start Date
       { wch: 15 },  // End Date
+      { wch: 10 },  // Days
     ];
 
     const workbook = XLSX.utils.book_new();
