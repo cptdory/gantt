@@ -1212,9 +1212,25 @@ function GanttChart() {
           for(let i = 0; i < firstDayOfMonth; i++) days.push(null);
           for(let i = 1; i <= daysInMonth; i++) days.push(i);
           
+          // Calculate optimal position to keep calendar in viewport
+          const calendarWidth = 280;
+          const calendarHeight = 280;
+          let top = datePickerState.y;
+          let left = datePickerState.x;
+          
+          // Check if off right edge, shift left
+          if (left + calendarWidth > window.innerWidth - 10) {
+            left = Math.max(10, window.innerWidth - calendarWidth - 10);
+          }
+          
+          // Check if off bottom edge, position above trigger
+          if (top + calendarHeight > window.innerHeight - 10) {
+            top = Math.max(10, datePickerState.y - calendarHeight - 4);
+          }
+          
           return (
-            <div onClick={()=>setDatePickerState(null)} style={{ position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:2999,background:"rgba(0,0,0,0.3)",display:"flex",alignItems:"flex-start",justifyContent:"flex-start",paddingTop:datePickerState.y }}>
-              <div onClick={(e)=>e.stopPropagation()} style={{ position:"fixed",top:datePickerState.y,left:datePickerState.x,background:"#fff",borderRadius:10,padding:"16px",boxShadow:"0 12px 36px rgba(0,0,0,.25)",zIndex:3000,minWidth:280 }}>
+            <div onClick={()=>setDatePickerState(null)} style={{ position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:2999,background:"rgba(0,0,0,0.3)" }}>
+              <div onClick={(e)=>e.stopPropagation()} style={{ position:"fixed",top:top,left:left,background:"#fff",borderRadius:10,padding:"16px",boxShadow:"0 12px 36px rgba(0,0,0,.25)",zIndex:3000,minWidth:280 }}>
                 <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12 }}>
                   <button onClick={()=>{const newMonth=displayMonth-1;const newYear=newMonth<0?displayYear-1:displayYear;setDatePickerState({...datePickerState,displayYear:newYear,displayMonth:newMonth<0?11:newMonth})}} style={{ background:"none",border:"none",cursor:"pointer",fontSize:14,color:"#334155",fontWeight:600 }}>◀</button>
                   <div style={{ fontSize:12,fontWeight:700,color:"#334155" }}>{new Date(displayYear,displayMonth).toLocaleDateString("en-US",{month:"long",year:"numeric"})}</div>
