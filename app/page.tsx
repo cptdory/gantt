@@ -338,7 +338,7 @@ function GanttChart() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(typeof window !== "undefined" && window.innerWidth < 768);
   const [viewMode, setViewMode] = useState<"day" | "week" | "month">("month");
-  const [columnWidths, setColumnWidths] = useState({ list: isMobile ? 160 : 210, owner: isMobile ? 100 : 130, status: isMobile ? 80 : 110, info: isMobile ? 60 : 80 });
+  const [columnWidths, setColumnWidths] = useState({ list: isMobile ? 160 : 210, owner: isMobile ? 100 : 130, status: isMobile ? 80 : 110, info: isMobile ? 60 : 80, duration: isMobile ? 50 : 60 });
   const [resizingColumn, setResizingColumn] = useState<string | null>(null);
   const [resizeStart, setResizeStart] = useState<number>(0);
   const [datePickerState, setDatePickerState] = useState<any>(null);
@@ -441,6 +441,7 @@ function GanttChart() {
   const OWNER_W = columnWidths.owner;
   const STATUS_W = columnWidths.status;
   const INFO_W = columnWidths.info;
+  const DURATION_W = columnWidths.duration;
 
   const baseSize = isMobile ? 4 : 5.4;
   const PX_PER_UNIT = viewMode === "day" ? baseSize * 5 : viewMode === "week" ? baseSize * 4.5 : baseSize * 30.5;
@@ -819,6 +820,10 @@ function GanttChart() {
                 </div>
                 <div className="col-header" style={{ width:INFO_W }}>
                   End
+                  <div className="resize-handle" onMouseDown={e => startResize(e, "duration")}/>
+                </div>
+                <div className="col-header" style={{ width:DURATION_W }}>
+                  Days
                 </div>
               </>}
             </div>
@@ -1029,7 +1034,7 @@ function GanttChart() {
                     )}
                     {/* End */}
                     {!isMobile && (
-                      <div style={{ width:INFO_W,display:"flex",alignItems:"center",padding:"0 10px",borderRight:"1px solid #e4e9f2",fontSize:10,color:"#64748b",whiteSpace:"nowrap",cursor:isDev&&isTask?"pointer":"default" }}
+                      <div style={{ width:INFO_W,display:"flex",alignItems:"center",padding:"0 10px",borderRight:"1px solid #edf0f7",fontSize:10,color:"#64748b",whiteSpace:"nowrap",cursor:isDev&&isTask?"pointer":"default" }}
                         onClick={(e)=>{
                           if(isDev&&isTask) {
                             const rect = e.currentTarget.getBoundingClientRect();
@@ -1039,11 +1044,17 @@ function GanttChart() {
                         {isTask?fmtShort(t.end):isPhase?<span style={{fontWeight:700,color:pm.color}}>{fmtShort(pm.end)}</span>:""}
                       </div>
                     )}
+                    {/* Days */}
+                    {!isMobile && (
+                      <div style={{ width:DURATION_W,display:"flex",alignItems:"center",padding:"0 10px",borderRight:"1px solid #e4e9f2",fontSize:10,color:"#64748b",whiteSpace:"nowrap",fontWeight:600 }}>
+                        {isTask?diffDays(t.start,t.end)+1:isPhase?<span style={{fontWeight:700,color:pm.color}}>{diffDays(pm.start,pm.end)+1}</span>:""}
+                      </div>
+                    )}
                   </div>
                 );
               })}
               {/* Milestone footer */}
-              <div style={{ height:isMobile?22:32,borderTop:"2px solid #e4e9f2",background:"#f8fafc",display:"flex",alignItems:"center",padding:"0 12px",fontSize:isMobile?8:9,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".1em",width:LIST_W+(isMobile?0:OWNER_W+STATUS_W+INFO_W*2),borderRight:"1px solid #e4e9f2",flexShrink:0,gap:6 }}>
+              <div style={{ height:isMobile?22:32,borderTop:"2px solid #e4e9f2",background:"#f8fafc",display:"flex",alignItems:"center",padding:"0 12px",fontSize:isMobile?8:9,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".1em",width:LIST_W+(isMobile?0:OWNER_W+STATUS_W+INFO_W*2+DURATION_W),borderRight:"1px solid #e4e9f2",flexShrink:0,gap:6 }}>
                 <span style={{ opacity:0.5 }}>◆</span> Milestones
               </div>
             </div>
