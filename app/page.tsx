@@ -14,6 +14,18 @@ function addDays(dateStr: string, n: number): string {
 function diffDays(a: string, b: string): number {
   return Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86400000);
 }
+function diffWeekdays(a: string, b: string): number {
+  const start = new Date(a);
+  const end = new Date(b);
+  let count = 0;
+  const current = new Date(start);
+  while (current <= end) {
+    const dayOfWeek = current.getDay();
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) count++;
+    current.setDate(current.getDate() + 1);
+  }
+  return count;
+}
 function fmtDate(d: string): string {
   return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" });
 }
@@ -1047,7 +1059,7 @@ function GanttChart() {
                     {/* Days */}
                     {!isMobile && (
                       <div style={{ width:DURATION_W,display:"flex",alignItems:"center",padding:"0 10px",borderRight:"1px solid #e4e9f2",fontSize:10,color:"#64748b",whiteSpace:"nowrap",fontWeight:600 }}>
-                        {isTask?diffDays(t.start,t.end)+1:isPhase?<span style={{fontWeight:700,color:pm.color}}>{diffDays(pm.start,pm.end)+1}</span>:""}
+                        {isTask?diffWeekdays(t.start,t.end):isPhase?<span style={{fontWeight:700,color:pm.color}}>{diffWeekdays(pm.start,pm.end)}</span>:""}
                       </div>
                     )}
                   </div>
