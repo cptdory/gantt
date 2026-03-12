@@ -101,10 +101,6 @@ function PhaseEditModal({ phases, onSave, onClose, isDev }: any) {
         }
         return p;
       });
-      for (let i = 1; i < next.length; i++) {
-        next[i] = { ...next[i], start: addDays(next[i-1].end, 1) };
-        next[i] = { ...next[i], end: addDays(next[i].start, diffDays(next[i].start, next[i].end) < 0 ? 27 : diffDays(next[i-1].end, next[i].end) - 1) };
-      }
       return next;
     });
   };
@@ -115,10 +111,6 @@ function PhaseEditModal({ phases, onSave, onClose, isDev }: any) {
       const oldStart = next[idx].start;
       const dur = diffDays(oldStart, next[idx].end);
       next[idx] = { ...next[idx], start: val, end: addDays(val, dur) };
-      for (let i = idx + 1; i < next.length; i++) {
-        const dur2 = diffDays(next[i].start, next[i].end);
-        next[i] = { ...next[i], start: addDays(next[i-1].end, 1), end: addDays(addDays(next[i-1].end, 1), dur2) };
-      }
       return next;
     });
   };
@@ -128,10 +120,6 @@ function PhaseEditModal({ phases, onSave, onClose, isDev }: any) {
       const next = [...prev];
       if (val <= next[idx].start) return prev;
       next[idx] = { ...next[idx], end: val };
-      for (let i = idx + 1; i < next.length; i++) {
-        const dur2 = diffDays(next[i].start, next[i].end);
-        next[i] = { ...next[i], start: addDays(next[i-1].end, 1), end: addDays(addDays(next[i-1].end, 1), dur2) };
-      }
       return next;
     });
   };
@@ -139,10 +127,6 @@ function PhaseEditModal({ phases, onSave, onClose, isDev }: any) {
   const deletePhase = (idx: number) => {
     setLocalPhases((prev: any) => {
       const next = prev.filter((p: any, i: number) => i !== idx);
-      for (let i = 1; i < next.length; i++) {
-        const dur = diffDays(next[i].start, next[i].end);
-        next[i] = { ...next[i], start: addDays(next[i-1].end, 1), end: addDays(addDays(next[i-1].end, 1), dur) };
-      }
       return next;
     });
   };
@@ -150,7 +134,7 @@ function PhaseEditModal({ phases, onSave, onClose, isDev }: any) {
   const addPhase = () => {
     setLocalPhases((prev: any) => {
       const lastPhase = prev[prev.length - 1];
-      const newStart = addDays(lastPhase.end, 1);
+      const newStart = lastPhase.start;
       const newEnd = addDays(newStart, 27);
       const phaseNum = parseInt(lastPhase.id.slice(1)) + 1;
       return [...prev, { id:`P${phaseNum}`, label:`New Phase`, color:"#6366f1", light:"#e0e7ff", start:newStart, end:newEnd }];
@@ -161,7 +145,7 @@ function PhaseEditModal({ phases, onSave, onClose, isDev }: any) {
     <Modal title="Edit Phase Schedule" onClose={onClose} width={640}>
       <div style={{ marginBottom:14,padding:"10px 14px",background:"linear-gradient(135deg,#eff6ff,#f0fdf4)",borderRadius:8,border:"1px solid #bfdbfe",fontSize:11,color:"#1d4ed8",display:"flex",gap:8,alignItems:"flex-start" }}>
         <span style={{fontSize:14,flexShrink:0}}>💡</span>
-        <span>Editing a phase's start or end date will automatically cascade and shift all subsequent phases. Tasks within each phase will shift proportionally.</span>
+        <span>Phases can now overlap. Edit any phase's start or end date independently without affecting other phases.</span>
       </div>
       <div style={{ overflowY:"auto", maxHeight:"58vh", paddingRight:4 }}>
         {localPhases.map((p: any, idx: number) => {
