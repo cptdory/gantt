@@ -85,8 +85,9 @@ function Field({ label, children }: any) {
 }
 
 /* ─── PHASE EDIT MODAL ──────────────────────────────────────────────── */
-function PhaseEditModal({ phases, onSave, onClose, isDev }: any) {
+function PhaseEditModal({ phases, tasks, onSave, onClose, isDev }: any) {
   const [localPhases, setLocalPhases] = useState(phases.map((p: any) => ({ ...p })));
+  const [adjustedTasks, setAdjustedTasks] = useState<any>({});
 
   const updatePhase = (idx: number, key: string, val: any) => {
     setLocalPhases((prev: any) => {
@@ -110,6 +111,24 @@ function PhaseEditModal({ phases, onSave, onClose, isDev }: any) {
       const next = [...prev];
       const oldStart = next[idx].start;
       const dur = diffDays(oldStart, next[idx].end);
+      const delta = diffDays(oldStart, val);
+      
+      // Adjust tasks under this phase
+      const phaseId = next[idx].id;
+      const phaseTasks = tasks.filter((t: any) => t.phaseId === phaseId);
+      const newAdjustments = { ...adjustedTasks };
+      
+      for (const task of phaseTasks) {
+        const adjustedStart = addDays(task.start, delta);
+        const adjustedEnd = addDays(task.end, delta);
+        newAdjustments[task.id] = {
+          ...task,
+          start: adjustedStart,
+          end: adjustedEnd
+        };
+      }
+      setAdjustedTasks(newAdjustments);
+      
       next[idx] = { ...next[idx], start: val, end: addDays(val, dur) };
       return next;
     });
@@ -119,6 +138,28 @@ function PhaseEditModal({ phases, onSave, onClose, isDev }: any) {
     setLocalPhases((prev: any) => {
       const next = [...prev];
       if (val <= next[idx].start) return prev;
+      
+      // Adjust tasks if end date changes
+      const phaseId = next[idx].id;
+      const oldEnd = next[idx].end;
+      const endDelta = diffDays(oldEnd, val);
+      const phaseTasks = tasks.filter((t: any) => t.phaseId === phaseId);
+      const newAdjustments = { ...adjustedTasks };
+      
+      for (const task of phaseTasks) {
+        // Only extend tasks if phase is being extended, don't shrink them
+        if (endDelta > 0) {
+          const currentEnd = adjustedTasks[task.id]?.end || task.end;
+          const adjustedEnd = addDays(currentEnd, endDelta);
+          newAdjustments[task.id] = {
+            ...task,
+            ...(adjustedTasks[task.id] || {}),
+            end: adjustedEnd
+          };
+        }
+      }
+      setAdjustedTasks(newAdjustments);
+      
       next[idx] = { ...next[idx], end: val };
       return next;
     });
@@ -199,7 +240,7 @@ function PhaseEditModal({ phases, onSave, onClose, isDev }: any) {
       <div style={{ display:"flex",gap:8,justifyContent:"flex-end",marginTop:16 }}>
         <button onClick={onClose} style={{ padding:"8px 18px",borderRadius:8,border:"1.5px solid #e2e8f0",background:"#f8fafc",fontSize:12,cursor:"pointer",color:"#374151",fontFamily:"inherit",fontWeight:600 }}>Cancel</button>
         {isDev && (
-          <button onClick={() => onSave(localPhases)} style={{ padding:"8px 24px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#2563eb,#1d4ed8)",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 14px rgba(37,99,235,0.35)" }}>Apply Changes</button>
+          <button onClick={() => onSave(localPhases, adjustedTasks)} style={{ padding:"8px 24px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#2563eb,#1d4ed8)",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 14px rgba(37,99,235,0.35)" }}>Apply Changes</button>
         )}
       </div>
     </Modal>
@@ -544,10 +585,30 @@ function GanttChart() {
     } catch (error) { console.error("Failed to delete task:", error); }
   };
 
-  const applyPhaseChanges = async (newPhases: any) => {
+  const applyPhaseChanges = async (newPhases: any, adjustedTasks?: any) => {
     try {
       const phasesWithOrder = newPhases.map((p: any, idx: number) => ({ id:p.id, label:p.label, color:p.color, light:p.light, start:p.start, end:p.end, durationDays:p.durationDays, order:idx }));
       await updatePhasesMutation({ phases: phasesWithOrder });
+      
+      // Apply task date adjustments
+      if (adjustedTasks && Object.keys(adjustedTasks).length > 0) {
+        for (const taskId in adjustedTasks) {
+          const task = adjustedTasks[taskId];
+          await updateTaskMutation({
+            id: taskId,
+            start: task.start,
+            end: task.end
+          });
+        }
+        // Update local task definitions with adjusted dates
+        setTaskDefs((ts: any) => ts.map((t: any) => {
+          if (adjustedTasks[t.id]) {
+            return { ...t, start: adjustedTasks[t.id].start, end: adjustedTasks[t.id].end };
+          }
+          return t;
+        }));
+      }
+      
       setPhases(phasesWithOrder);
       setModal(null);
     } catch (error) { console.error("Failed to update phases:", error); }
@@ -1256,7 +1317,7 @@ function GanttChart() {
       )}
 
       {/* MODALS */}
-      {modal?.mode==="editPhases" && <PhaseEditModal phases={phases} onSave={applyPhaseChanges} onClose={()=>setModal(null)} isDev={isDev}/>}
+      {modal?.mode==="editPhases" && <PhaseEditModal phases={phases} tasks={tasks} onSave={applyPhaseChanges} onClose={()=>setModal(null)} isDev={isDev}/>}
       {modal && (modal.mode==="add"||modal.mode==="edit") && (
         <Modal title={modal.mode==="add"?"Add New Task":"Edit Task"} onClose={()=>setModal(null)}>
           <TaskForm initial={modal.mode==="edit"?modal.task:null} onSave={saveTask} onClose={()=>setModal(null)} allEpics={allEpics} phases={phases} isDev={isDev}/>
