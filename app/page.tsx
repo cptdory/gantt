@@ -26,6 +26,24 @@ function diffWeekdays(a: string, b: string): number {
   }
   return count;
 }
+function addWeekdays(dateStr: string, n: number): string {
+  if (n <= 0) return dateStr;
+  const d = new Date(dateStr);
+  let count = 0;
+  while (count < n) {
+    const dayOfWeek = d.getDay();
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) count++;
+    if (count < n) d.setDate(d.getDate() + 1);
+  }
+  return d.toISOString().slice(0, 10);
+}
+function ensureWeekday(dateStr: string): string {
+  const d = new Date(dateStr);
+  while (d.getDay() === 0 || d.getDay() === 6) {
+    d.setDate(d.getDate() + 1);
+  }
+  return d.toISOString().slice(0, 10);
+}
 function fmtDate(d: string): string {
   return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" });
 }
@@ -85,9 +103,8 @@ function Field({ label, children }: any) {
 }
 
 /* ─── PHASE EDIT MODAL ──────────────────────────────────────────────── */
-function PhaseEditModal({ phases, tasks, onSave, onClose, isDev }: any) {
+function PhaseEditModal({ phases, onSave, onClose, isDev }: any) {
   const [localPhases, setLocalPhases] = useState(phases.map((p: any) => ({ ...p })));
-  const [adjustedTasks, setAdjustedTasks] = useState<any>({});
 
   const updatePhase = (idx: number, key: string, val: any) => {
     setLocalPhases((prev: any) => {
@@ -111,24 +128,6 @@ function PhaseEditModal({ phases, tasks, onSave, onClose, isDev }: any) {
       const next = [...prev];
       const oldStart = next[idx].start;
       const dur = diffDays(oldStart, next[idx].end);
-      const delta = diffDays(oldStart, val);
-      
-      // Adjust tasks under this phase
-      const phaseId = next[idx].id;
-      const phaseTasks = tasks.filter((t: any) => t.phaseId === phaseId);
-      const newAdjustments = { ...adjustedTasks };
-      
-      for (const task of phaseTasks) {
-        const adjustedStart = addDays(task.start, delta);
-        const adjustedEnd = addDays(task.end, delta);
-        newAdjustments[task.id] = {
-          ...task,
-          start: adjustedStart,
-          end: adjustedEnd
-        };
-      }
-      setAdjustedTasks(newAdjustments);
-      
       next[idx] = { ...next[idx], start: val, end: addDays(val, dur) };
       return next;
     });
@@ -138,28 +137,6 @@ function PhaseEditModal({ phases, tasks, onSave, onClose, isDev }: any) {
     setLocalPhases((prev: any) => {
       const next = [...prev];
       if (val <= next[idx].start) return prev;
-      
-      // Adjust tasks if end date changes
-      const phaseId = next[idx].id;
-      const oldEnd = next[idx].end;
-      const endDelta = diffDays(oldEnd, val);
-      const phaseTasks = tasks.filter((t: any) => t.phaseId === phaseId);
-      const newAdjustments = { ...adjustedTasks };
-      
-      for (const task of phaseTasks) {
-        // Only extend tasks if phase is being extended, don't shrink them
-        if (endDelta > 0) {
-          const currentEnd = adjustedTasks[task.id]?.end || task.end;
-          const adjustedEnd = addDays(currentEnd, endDelta);
-          newAdjustments[task.id] = {
-            ...task,
-            ...(adjustedTasks[task.id] || {}),
-            end: adjustedEnd
-          };
-        }
-      }
-      setAdjustedTasks(newAdjustments);
-      
       next[idx] = { ...next[idx], end: val };
       return next;
     });
@@ -240,7 +217,7 @@ function PhaseEditModal({ phases, tasks, onSave, onClose, isDev }: any) {
       <div style={{ display:"flex",gap:8,justifyContent:"flex-end",marginTop:16 }}>
         <button onClick={onClose} style={{ padding:"8px 18px",borderRadius:8,border:"1.5px solid #e2e8f0",background:"#f8fafc",fontSize:12,cursor:"pointer",color:"#374151",fontFamily:"inherit",fontWeight:600 }}>Cancel</button>
         {isDev && (
-          <button onClick={() => onSave(localPhases, adjustedTasks)} style={{ padding:"8px 24px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#2563eb,#1d4ed8)",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 14px rgba(37,99,235,0.35)" }}>Apply Changes</button>
+          <button onClick={() => onSave(localPhases)} style={{ padding:"8px 24px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#2563eb,#1d4ed8)",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 14px rgba(37,99,235,0.35)" }}>Apply Changes</button>
         )}
       </div>
     </Modal>
@@ -585,31 +562,73 @@ function GanttChart() {
     } catch (error) { console.error("Failed to delete task:", error); }
   };
 
-  const applyPhaseChanges = async (newPhases: any, adjustedTasks?: any) => {
+  const applyPhaseChanges = async (newPhases: any) => {
     try {
-      const phasesWithOrder = newPhases.map((p: any, idx: number) => ({ id:p.id, label:p.label, color:p.color, light:p.light, start:p.start, end:p.end, durationDays:p.durationDays, order:idx }));
-      await updatePhasesMutation({ phases: phasesWithOrder });
+      // Track original phases for comparison
+      const originalPhases = phases.reduce((acc: any, p: any) => ({ ...acc, [p.id]: p }), {});
       
-      // Apply task date adjustments
-      if (adjustedTasks && Object.keys(adjustedTasks).length > 0) {
-        for (const taskId in adjustedTasks) {
-          const task = adjustedTasks[taskId];
-          await updateTaskMutation({
-            id: taskId,
-            start: task.start,
-            end: task.end
-          });
-        }
-        // Update local task definitions with adjusted dates
-        setTaskDefs((ts: any) => ts.map((t: any) => {
-          if (adjustedTasks[t.id]) {
-            return { ...t, start: adjustedTasks[t.id].start, end: adjustedTasks[t.id].end };
+      // Adjust task dates based on phase changes
+      const adjustedTasks = [...taskDefs];
+      const taskUpdates: any[] = [];
+      
+      for (const newPhase of newPhases) {
+        const oldPhase = originalPhases[newPhase.id];
+        if (!oldPhase) continue;
+        
+        // Check if phase start date changed
+        if (oldPhase.start !== newPhase.start) {
+          // Find all tasks in this phase and adjust them
+          const phaseTasks = adjustedTasks.filter(t => t.phaseId === newPhase.id);
+          
+          for (const task of phaseTasks) {
+            // Calculate weekday offset from old phase start to task start (1-indexed)
+            // This tells us which business day of the phase the task starts on
+            const weekdayOffset = diffWeekdays(oldPhase.start, task.start);
+            
+            // Calculate task duration in business days
+            const taskWeekdays = diffWeekdays(task.start, task.end);
+            
+            // Calculate new dates based on the new phase start
+            // newTaskStart = the same business day number of the new phase
+            const newTaskStart = addWeekdays(newPhase.start, weekdayOffset);
+            
+            // newTaskEnd = apply the same business day duration
+            const newTaskEnd = addWeekdays(newTaskStart, taskWeekdays);
+            
+            // Ensure dates are weekdays (fallback, should already be guaranteed)
+            const finalStart = ensureWeekday(newTaskStart);
+            const finalEnd = ensureWeekday(newTaskEnd);
+            
+            // Mark task for update
+            const taskIndex = adjustedTasks.findIndex(t => t.id === task.id);
+            if (taskIndex !== -1) {
+              adjustedTasks[taskIndex] = { ...adjustedTasks[taskIndex], start: finalStart, end: finalEnd };
+              taskUpdates.push({ id: task.id, start: finalStart, end: finalEnd });
+            }
           }
-          return t;
-        }));
+        }
       }
       
-      setPhases(phasesWithOrder);
+      // Set phase start to first task start
+      const finalPhases = newPhases.map((p: any, idx: number) => {
+        const phaseTasks = adjustedTasks.filter(t => t.phaseId === p.id);
+        if (phaseTasks.length > 0) {
+          const firstTaskStart = phaseTasks.reduce((min: string, t: any) => t.start < min ? t.start : min, phaseTasks[0].start);
+          return { id:p.id, label:p.label, color:p.color, light:p.light, start: firstTaskStart, end:p.end, durationDays:p.durationDays, order:idx };
+        }
+        return { id:p.id, label:p.label, color:p.color, light:p.light, start:p.start, end:p.end, durationDays:p.durationDays, order:idx };
+      });
+      
+      // Apply all updates
+      await updatePhasesMutation({ phases: finalPhases });
+      
+      // Update all affected tasks
+      for (const taskUpdate of taskUpdates) {
+        await updateTaskMutation({ id: taskUpdate.id, start: taskUpdate.start, end: taskUpdate.end });
+      }
+      
+      setPhases(finalPhases);
+      setTaskDefs(adjustedTasks);
       setModal(null);
     } catch (error) { console.error("Failed to update phases:", error); }
   };
@@ -1317,7 +1336,7 @@ function GanttChart() {
       )}
 
       {/* MODALS */}
-      {modal?.mode==="editPhases" && <PhaseEditModal phases={phases} tasks={tasks} onSave={applyPhaseChanges} onClose={()=>setModal(null)} isDev={isDev}/>}
+      {modal?.mode==="editPhases" && <PhaseEditModal phases={phases} onSave={applyPhaseChanges} onClose={()=>setModal(null)} isDev={isDev}/>}
       {modal && (modal.mode==="add"||modal.mode==="edit") && (
         <Modal title={modal.mode==="add"?"Add New Task":"Edit Task"} onClose={()=>setModal(null)}>
           <TaskForm initial={modal.mode==="edit"?modal.task:null} onSave={saveTask} onClose={()=>setModal(null)} allEpics={allEpics} phases={phases} isDev={isDev}/>
