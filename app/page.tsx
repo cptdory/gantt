@@ -356,6 +356,7 @@ function GanttChart() {
   const [resizingColumn, setResizingColumn] = useState<string | null>(null);
   const [resizeStart, setResizeStart] = useState<number>(0);
   const [datePickerState, setDatePickerState] = useState<any>(null);
+  const [chartVisible, setChartVisible] = useState(false);
 
   const headerScrollRef = useRef<HTMLDivElement>(null);
   const bodyScrollRef = useRef<HTMLDivElement>(null);
@@ -843,6 +844,24 @@ function GanttChart() {
           <span>📥</span>
           <span style={{display:isMobile?"none":"inline"}}>Export</span>
         </button>
+        <button
+  className="toolbar-btn"
+  onClick={() => setChartVisible(v => !v)}
+  title={chartVisible ? "Hide chart" : "Show chart"}
+  style={{
+    display: "flex", alignItems: "center", gap: 5,
+    padding: "6px 14px", borderRadius: 8,
+    border: "1.5px solid #e2e8f0",
+    background: chartVisible ? "#f8fafc" : "#eff6ff",
+    color: chartVisible ? "#374151" : "#1d4ed8",
+    fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit"
+  }}
+>
+  <span>{chartVisible ? "⊟" : "⊞"}</span>
+  <span style={{ display: isMobile ? "none" : "inline" }}>
+    {chartVisible ? "Hide Chart" : "Show Chart"}
+  </span>
+</button>
 
         {/* ENHANCED VIEW MODE TOGGLE */}
         <ViewModeToggle viewMode={viewMode} setViewMode={setViewMode} />
@@ -875,8 +894,8 @@ function GanttChart() {
 
           {/* HEADER */}
           <div style={{ display:"flex",flexShrink:0,height:isMobile?42:56,background:"#f8fafc",borderBottom:"2px solid #e4e9f2",zIndex:10 }}>
-            {/* Frozen left header */}
-            <div style={{ display:"flex",flexShrink:0,zIndex:11,background:"#f8fafc" }}>
+            {/* Frozen left header — always visible, expands when chart hidden */}
+            <div style={{ display:"flex", flexShrink:0, zIndex:11, background:"#f8fafc", flex: chartVisible ? "none" : 1 }}>
               <div className="col-header" style={{ width:LIST_W,gap:6 }}>
                 <span style={{ opacity:0.5 }}>⋮⋮</span>{isMobile?"Task":"Name / Task"}
                 <div className="resize-handle" onMouseDown={e => startResize(e, "list")}/>
@@ -903,9 +922,11 @@ function GanttChart() {
                 </div>
               </>}
             </div>
-            {/* Scrollable timeline header */}
-            <div ref={headerScrollRef} onScroll={onHeaderScroll}
-              style={{ flex:1,overflowX:"scroll",overflowY:"hidden",display:"flex",flexDirection:"column" }}>
+            
+            {/* Scrollable timeline header — conditionally rendered */}
+            {chartVisible && (
+              <div ref={headerScrollRef} onScroll={onHeaderScroll}
+                style={{ flex:1,overflowX:"scroll",overflowY:"hidden",display:"flex",flexDirection:"column" }}>
               <div style={{ minWidth:TOTAL_W+60,width:TOTAL_W+60,height:"100%",display:"flex",flexDirection:"column",paddingLeft:30 }}>
                 {/* Phase color bands in header */}
                 <div style={{ position:"relative",height:isMobile?10:18,flexShrink:0 }}>
@@ -994,13 +1015,26 @@ function GanttChart() {
                 </div>
               </div>
             </div>
+            )}
+            
           </div>
 
           {/* ROWS */}
           <div style={{ flex:1,display:"flex",overflow:"hidden",minHeight:0 }}>
-            {/* Frozen left columns */}
-            <div style={{ display:"flex",flexShrink:0,flexDirection:"column",zIndex:5,background:"#fff",borderRight:"1px solid #e4e9f2",overflowY:"auto" }}
-              id="frozen-cols" onScroll={onFrozenLeftScroll}>
+            {/* Frozen left columns — expands when chart hidden */}
+            <div
+              style={{
+                display:"flex", flexShrink:0, flexDirection:"column", zIndex:5,
+                background:"#fff", borderRight: chartVisible ? "1px solid #e4e9f2" : "none",
+                overflowY:"auto",
+                // KEY: when chart is hidden, fill all available width
+                flex: chartVisible ? "none" : 1,
+                // Override fixed widths on inner cells via a wrapper width
+                minWidth: chartVisible ? "auto" : "100%",
+              }}
+              id="frozen-cols"
+              onScroll={onFrozenLeftScroll}
+            >
               {rows.map((row, ri) => {
                 const { type, pm } = row;
                 const t = type === "task" ? row.t : null;
@@ -1130,15 +1164,16 @@ function GanttChart() {
                 );
               })}
               {/* Milestone footer */}
-              <div style={{ height:isMobile?22:32,borderTop:"2px solid #e4e9f2",background:"#f8fafc",display:"flex",alignItems:"center",padding:"0 12px",fontSize:isMobile?8:9,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".1em",width:LIST_W+(isMobile?0:OWNER_W+STATUS_W+INFO_W*2+DURATION_W),borderRight:"1px solid #e4e9f2",flexShrink:0,gap:6 }}>
+              <div style={{ height:isMobile?22:32,borderTop:"2px solid #e4e9f2",background:"#f8fafc",display:"flex",alignItems:"center",padding:"0 12px",fontSize:isMobile?8:9,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".1em",width:chartVisible ? LIST_W+(isMobile?0:OWNER_W+STATUS_W+INFO_W*2+DURATION_W) : "100%",borderRight:chartVisible?"1px solid #e4e9f2":"none",flexShrink:0,gap:6 }}>
                 <span style={{ opacity:0.5 }}>◆</span> Milestones
               </div>
             </div>
 
-            {/* Scrollable timeline */}
-            <div ref={bodyScrollRef} onScroll={onBodyScroll}
-              style={{ flex:1,overflowX:"scroll",overflowY:"auto",position:"relative" }}
-              onMouseLeave={()=>setTooltip(null)}>
+            {/* Scrollable timeline — conditionally rendered */}
+            {chartVisible && (
+              <div ref={bodyScrollRef} onScroll={onBodyScroll}
+                style={{ flex:1,overflowX:"scroll",overflowY:"auto",position:"relative" }}
+                onMouseLeave={()=>setTooltip(null)}>
               <div style={{ minWidth:TOTAL_W+60,width:TOTAL_W+60,position:"relative",paddingLeft:30 }}>
                 {rows.map((row, ri) => {
                   const { type, pm } = row;
@@ -1230,6 +1265,7 @@ function GanttChart() {
                 </div>
               </div>
             </div>
+            )}
           </div>
         </div>
       </div>
