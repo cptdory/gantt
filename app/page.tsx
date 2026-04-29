@@ -818,7 +818,7 @@ function GanttChart() {
             <span style={{ color: "#fff", fontWeight: 800, fontSize: 13, letterSpacing: "-0.4px" }}>QED</span>
           </div>
           <div style={{ width: 1, height: 18, background: "rgba(255,255,255,.2)" }} />
-          <span style={{ color: "rgba(255,255,255,.85)", fontSize: 12, fontWeight: 500, letterSpacing: "-0.2px" }}>BC Implementation — PH</span>
+          <span style={{ color: "rgba(255,255,255,.85)", fontSize: 12, fontWeight: 500, letterSpacing: "-0.2px" }}>Business Central Implementation</span>
         </div>
 
       </div>
